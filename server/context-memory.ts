@@ -51,6 +51,7 @@ export interface InjectContextOptions {
   includeTeachings?: boolean;
   includeTasks?: boolean;
   useVectorSearch?: boolean;
+  useMemorySystem?: boolean;
 }
 
 /**
@@ -359,6 +360,31 @@ export async function injectContext(
   const sources: ContextSource[] = [];
 
   try {
+    // Check for hybrid memory system (Qdrant + Pinecone)
+    if (options.useMemorySystem) {
+      try {
+        const { retrieveAsContext } = await import('./memory/hybrid-retriever');
+        const memoryContext = await retrieveAsContext(query, {
+          limit: 5,
+          min_score: 0.25,
+          include_compacted: true,
+          include_entities: true,
+        });
+
+        if (memoryContext) {
+          sources.push({
+            type: 'doc',
+            id: 'memory-system',
+            title: 'Memory System Context',
+            content: memoryContext,
+            relevance: 0.9,
+          });
+        }
+      } catch (error) {
+        logger.warn({ error }, 'Memory system retrieval failed, falling back');
+      }
+    }
+
     // Check for vector search (Level 2)
     if (useVectorSearch) {
       try {

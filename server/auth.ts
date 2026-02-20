@@ -14,7 +14,16 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { authenticator } from "otplib";
+import { TOTP, generateSecret, generateURI, verifySync } from "otplib";
+
+// Compatibility shim for otplib v5+ (no more `authenticator` export)
+const authenticator = {
+  generateSecret: () => generateSecret(),
+  keyuri: (account: string, issuer: string, secret: string) =>
+    generateURI({ type: "totp", account, issuer, secret }),
+  verify: ({ token, secret }: { token: string; secret: string }) =>
+    verifySync({ otp: token, secret }),
+};
 import * as QRCode from "qrcode";
 import { db } from "../db";
 import { users, auditLogs, sessions, TrustedDevice } from "@shared/schema";

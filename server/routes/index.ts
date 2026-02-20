@@ -43,6 +43,8 @@ import aiLearningRoutes from "./ai-learning";
 import ventureLabRoutes from "./venture-lab";
 import ragRoutes from "./rag";
 import knowledgeFilesRoutes from "./knowledge-files";
+import memoryRoutes from "./memory";
+import agentRoutes from "./agents";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================================
@@ -135,6 +137,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/rag', ragRoutes);
 
   // ============================================================================
+  // MEMORY SYSTEM (Hybrid Qdrant + Pinecone)
+  // Session compaction, offline autonomy, and mobile access
+  // ============================================================================
+  app.use('/api/memory', memoryRoutes);
+
+  // ============================================================================
   // SETTINGS & USER PREFERENCES
   // ============================================================================
   app.use('/api/settings', settingsRoutes);
@@ -189,6 +197,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // - /api/project-scaffolding/* -> /project-scaffolding/*
   // ============================================================================
   app.use('/api', aiChatRoutes);
+
+  // ============================================================================
+  // HIERARCHICAL AGENT SYSTEM
+  // Multi-agent organization with delegation, hierarchy, and memory
+  // ============================================================================
+  app.use('/api/agents', agentRoutes);
 
   // ============================================================================
   // FILE UPLOADS

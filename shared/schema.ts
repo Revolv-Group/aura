@@ -3047,3 +3047,286 @@ export const insertVentureIdeaSchema = createInsertSchema(ventureIdeas).omit({
 
 export type VentureIdea = typeof ventureIdeas.$inferSelect;
 export type InsertVentureIdea = z.infer<typeof insertVentureIdeaSchema>;
+
+// ============================================================================
+// MEMORY SYSTEM TABLES
+// ============================================================================
+
+// Task queue for deferred processing (cloud agent -> local execution)
+export const memoryTaskQueue = pgTable(
+  "memory_task_queue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskType: text("task_type").notNull(), // "heavy_summarize" | "deep_analysis" | "reindex"
+    payload: jsonb("payload").notNull(),
+    priority: integer("priority").default(5),
+    status: text("status").default("queued").notNull(), // "queued" | "running" | "completed" | "failed"
+    source: text("source"), // "cloud_agent" | "mobile"
+    result: jsonb("result"),
+    error: text("error"),
+    retryCount: integer("retry_count").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_memory_task_queue_status").on(table.status),
+    index("idx_memory_task_queue_priority").on(table.priority),
+    index("idx_memory_task_queue_created_at").on(table.createdAt),
+  ]
+);
+
+export const insertMemoryTaskSchema = createInsertSchema(memoryTaskQueue).omit({
+  id: true,
+  createdAt: true,
+});
+export type MemoryTask = typeof memoryTaskQueue.$inferSelect;
+export type InsertMemoryTask = z.infer<typeof insertMemoryTaskSchema>;
+
+// Sync version tracking between local Qdrant and cloud Pinecone
+export const memorySyncLedger = pgTable(
+  "memory_sync_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityType: text("entity_type").notNull(), // "compacted_memory" | "entity" | "decision"
+    entityId: text("entity_id").notNull(),
+    localVersion: integer("local_version").notNull(),
+    cloudVersion: integer("cloud_version").notNull(),
+    lastSyncAt: timestamp("last_sync_at"),
+    syncDirection: text("sync_direction"), // "up" | "down" | "conflict"
+    status: text("status").default("pending_up").notNull(),
+  },
+  (table) => [
+    index("idx_memory_sync_ledger_entity").on(table.entityType, table.entityId),
+    index("idx_memory_sync_ledger_status").on(table.status),
+  ]
+);
+
+export const insertSyncLedgerSchema = createInsertSchema(memorySyncLedger).omit({
+  id: true,
+});
+export type SyncLedgerEntry = typeof memorySyncLedger.$inferSelect;
+export type InsertSyncLedgerEntry = z.infer<typeof insertSyncLedgerSchema>;
+
+// ----------------------------------------------------------------------------
+// HIERARCHICAL AGENT SYSTEM
+// Agent definitions, conversations, task delegation, and memory
+// ----------------------------------------------------------------------------
+
+// Agent role enum — determines model tier defaults and hierarchy position
+export const agentRoleEnum = pgEnum('agent_role', [
+  'executive',   // C-suite: CMO, CTO, COO — gets top-tier models
+  'manager',     // Team leads: Head of Products — gets mid-tier models
+  'specialist',  // Domain experts: SEO, Growth — gets fast models
+  'worker',      // Execution-focused: content writer — gets fast models
+]);
+
+// Agent task status enum
+export const agentTaskStatusEnum = pgEnum('agent_task_status', [
+  'pending',
+  'in_progress',
+  'delegated',
+  'completed',
+  'failed',
+  'needs_review',
+]);
+
+// Agent memory type enum
+export const agentMemoryTypeEnum = pgEnum('agent_memory_type', [
+  'learning',
+  'preference',
+  'context',
+  'relationship',
+]);
+
+// Agents — hierarchical AI agent definitions (loaded from soul templates or created via UI)
+export const agents = pgTable(
+  "agents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    role: agentRoleEnum("role").notNull(),
+    parentId: uuid("parent_id").references((): any => agents.id, { onDelete: "set null" }),
+    ventureId: uuid("venture_id").references(() => ventures.id, { onDelete: "set null" }),
+
+    // Soul — the agent's full identity (markdown definition)
+    soul: text("soul").notNull(),
+
+    // Parsed from soul frontmatter (denormalized for queries)
+    expertise: jsonb("expertise").$type<string[]>().default([]),
+    availableTools: jsonb("available_tools").$type<string[]>().default([]),
+    actionPermissions: jsonb("action_permissions").$type<string[]>().default(['read']),
+    canDelegateTo: jsonb("can_delegate_to").$type<string[]>().default([]),
+    maxDelegationDepth: integer("max_delegation_depth").default(2),
+
+    // Model configuration
+    preferredModel: text("preferred_model"),
+    modelTier: text("model_tier").$type<'auto' | 'top' | 'mid' | 'fast'>().default('auto'),
+    temperature: real("temperature").default(0.7),
+    maxTokens: integer("max_tokens").default(4096),
+
+    // Memory
+    memoryScope: text("memory_scope").$type<'isolated' | 'shared' | 'inherit_parent'>().default('isolated'),
+    maxContextTokens: integer("max_context_tokens").default(8000),
+
+    // Schedule (cron-based proactive execution)
+    schedule: jsonb("schedule").$type<Record<string, string>>(),
+
+    // Status
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_agents_slug").on(table.slug),
+    index("idx_agents_role").on(table.role),
+    index("idx_agents_parent_id").on(table.parentId),
+    index("idx_agents_venture_id").on(table.ventureId),
+    index("idx_agents_is_active").on(table.isActive),
+  ]
+);
+
+export const agentsRelations = relations(agents, ({ one, many }) => ({
+  parent: one(agents, { fields: [agents.parentId], references: [agents.id], relationName: "agentHierarchy" }),
+  children: many(agents, { relationName: "agentHierarchy" }),
+  venture: one(ventures, { fields: [agents.ventureId], references: [ventures.id] }),
+  conversations: many(agentConversations),
+  assignedTasks: many(agentTasks, { relationName: "assignedTo" }),
+  delegatedTasks: many(agentTasks, { relationName: "assignedBy" }),
+  memories: many(agentMemory),
+}));
+
+export const insertAgentSchema = createInsertSchema(agents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Agent = typeof agents.$inferSelect;
+export type InsertAgent = z.infer<typeof insertAgentSchema>;
+
+// Agent Conversations — per-agent chat history with delegation threading
+export const agentConversations = pgTable(
+  "agent_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "cascade" }).notNull(),
+    role: text("role").$type<'user' | 'assistant' | 'system' | 'delegation'>().notNull(),
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").$type<{
+      model?: string;
+      tokensUsed?: number;
+      toolCalls?: any[];
+      toolResults?: any[];
+      delegationContext?: Record<string, unknown>;
+      [key: string]: any;
+    }>(),
+    parentMessageId: uuid("parent_message_id"),
+    delegationFrom: uuid("delegation_from").references(() => agents.id, { onDelete: "set null" }),
+    delegationTaskId: uuid("delegation_task_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_agent_conversations_agent_id").on(table.agentId),
+    index("idx_agent_conversations_delegation_from").on(table.delegationFrom),
+    index("idx_agent_conversations_created_at").on(table.createdAt),
+  ]
+);
+
+export const agentConversationsRelations = relations(agentConversations, ({ one }) => ({
+  agent: one(agents, { fields: [agentConversations.agentId], references: [agents.id] }),
+  delegatingAgent: one(agents, { fields: [agentConversations.delegationFrom], references: [agents.id] }),
+}));
+
+export const insertAgentConversationSchema = createInsertSchema(agentConversations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AgentConversation = typeof agentConversations.$inferSelect;
+export type InsertAgentConversation = z.infer<typeof insertAgentConversationSchema>;
+
+// Agent Tasks — inter-agent task delegation with privilege attenuation
+export const agentTasks = pgTable(
+  "agent_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    description: text("description"),
+
+    // Assignment
+    assignedBy: text("assigned_by").notNull(), // agent UUID or 'user' for direct assignment
+    assignedTo: uuid("assigned_to").references(() => agents.id, { onDelete: "cascade" }).notNull(),
+
+    // Delegation chain
+    delegationChain: jsonb("delegation_chain").$type<string[]>().default([]),
+    depth: integer("depth").default(0),
+
+    // Execution
+    status: agentTaskStatusEnum("status").default("pending").notNull(),
+    priority: integer("priority").default(5),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    error: text("error"),
+
+    // Permissions passed down (privilege attenuation)
+    grantedPermissions: jsonb("granted_permissions").$type<string[]>().default([]),
+    grantedTools: jsonb("granted_tools").$type<string[]>().default([]),
+
+    // Timing
+    deadline: timestamp("deadline"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_agent_tasks_assigned_by").on(table.assignedBy),
+    index("idx_agent_tasks_assigned_to").on(table.assignedTo),
+    index("idx_agent_tasks_status").on(table.status),
+    index("idx_agent_tasks_priority").on(table.priority),
+    index("idx_agent_tasks_created_at").on(table.createdAt),
+  ]
+);
+
+export const agentTasksRelations = relations(agentTasks, ({ one }) => ({
+  assignee: one(agents, { fields: [agentTasks.assignedTo], references: [agents.id], relationName: "assignedTo" }),
+}));
+
+export const insertAgentTaskSchema = createInsertSchema(agentTasks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AgentTask = typeof agentTasks.$inferSelect;
+export type InsertAgentTask = z.infer<typeof insertAgentTaskSchema>;
+
+// Agent Memory — per-agent persistent memory (supplements Qdrant vector store)
+export const agentMemory = pgTable(
+  "agent_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "cascade" }).notNull(),
+    memoryType: agentMemoryTypeEnum("memory_type").notNull(),
+    content: text("content").notNull(),
+    importance: real("importance").default(0.5),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    index("idx_agent_memory_agent_id").on(table.agentId),
+    index("idx_agent_memory_type").on(table.memoryType),
+    index("idx_agent_memory_importance").on(table.importance),
+  ]
+);
+
+export const agentMemoryRelations = relations(agentMemory, ({ one }) => ({
+  agent: one(agents, { fields: [agentMemory.agentId], references: [agents.id] }),
+}));
+
+export const insertAgentMemorySchema = createInsertSchema(agentMemory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AgentMemoryEntry = typeof agentMemory.$inferSelect;
+export type InsertAgentMemoryEntry = z.infer<typeof insertAgentMemorySchema>;

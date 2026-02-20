@@ -45,7 +45,7 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
+  app.use("*path", async (req, res, next) => {
     const url = req.originalUrl;
     try {
       const clientTemplate = path.resolve(
@@ -87,7 +87,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist (SPA routing)
-  app.use("*", (_req, res, next) => {
+  app.use("*path", (_req, res, next) => {
     res.sendFile(indexPath, (err) => {
       if (err) {
         log(`Error serving index.html: ${err.message}`);

@@ -73,7 +73,7 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/health', // Don't rate limit health checks
+  skip: (req) => req.path === '/health' || req.path.startsWith('/@') || req.path.startsWith('/node_modules') || req.path.startsWith('/src'),
 });
 
 // Strict rate limiter for authentication endpoints
@@ -365,7 +365,22 @@ app.use((req, res, next) => {
       const { scheduleEmbeddingJobs } = await import('./embedding-jobs');
       scheduleEmbeddingJobs();
 
-      log('✓ SB-OS automations initialized (day creation, reminders, RAG embeddings)');
+      // Initialize agent scheduler (proactive agent execution)
+      const { initializeScheduler } = await import('./agents/agent-scheduler');
+      await initializeScheduler();
+
+      // Initialize channel adapters (Telegram, etc.)
+      try {
+        const { registerAdapter, startAllAdapters } = await import('./channels/channel-manager');
+        const { telegramAdapter } = await import('./channels/adapters/telegram-adapter');
+        registerAdapter(telegramAdapter);
+        await startAllAdapters();
+        log('✓ Channel adapters initialized');
+      } catch (channelError) {
+        log('Channel adapters setup skipped:', String(channelError));
+      }
+
+      log('✓ SB-OS automations initialized (day creation, reminders, RAG embeddings, agent scheduler)');
     } catch (error) {
       log('SB-OS automations setup skipped:', String(error));
     }

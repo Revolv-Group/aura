@@ -36,6 +36,9 @@ import CapturePage from "@/pages/capture";
 import TradingPage from "@/pages/trading";
 import AiChat from "@/pages/ai-chat";
 import AllTasks from "@/pages/all-tasks";
+import AgentsPage from "@/pages/agents";
+import AgentDetailPage from "@/pages/agent-detail";
+import DelegationLogPage from "@/pages/delegation-log";
 import CommandCenterV2 from "@/pages/command-center-v2";
 import PeoplePage from "@/pages/people";
 import VentureLab from "@/pages/venture-lab";
@@ -90,6 +93,9 @@ function Router() {
             <Route path="/command-center-v1" component={CommandCenter} />
             <Route path="/ai-chat" component={AiChat} />
             <Route path="/tasks" component={AllTasks} />
+            <Route path="/agents" component={AgentsPage} />
+            <Route path="/agents/delegation-log" component={DelegationLogPage} />
+            <Route path="/agents/:slug" component={AgentDetailPage} />
             <Route component={NotFound} />
           </Switch>
         </Layout>
