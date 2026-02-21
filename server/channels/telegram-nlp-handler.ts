@@ -26,6 +26,35 @@ const NUTRITION_KEYWORDS = [
   "meal", "calories", "protein",
 ];
 
+// "morning done" shortcut patterns — exact match, no LLM call needed
+const MORNING_DONE_PATTERNS = [
+  "morning done", "morning complete", "rituals done", "habits done",
+];
+
+function isMorningDoneShortcut(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return MORNING_DONE_PATTERNS.includes(lower);
+}
+
+async function handleMorningDoneShortcut(): Promise<string> {
+  const today = new Date().toISOString().split("T")[0];
+  const day = await storage.getDayOrCreate(today);
+  const existing = (day.morningRituals as Record<string, any>) ?? {};
+
+  const merged = {
+    ...existing,
+    pressUps: { ...existing.pressUps, done: true, reps: existing.pressUps?.reps ?? 50 },
+    squats: { ...existing.squats, done: true, reps: existing.squats?.reps ?? 50 },
+    supplements: { done: true },
+    water: { done: true },
+    completedAt: new Date().toISOString(),
+  };
+
+  await storage.updateDay(today, { morningRituals: merged } as any);
+
+  return `All morning rituals marked done! ✅\n  ✅ Press-ups: ${merged.pressUps.reps}\n  ✅ Squats: ${merged.squats.reps}\n  ✅ Supplements: done\n  ✅ Water: done\n\n🎉 All morning rituals complete!`;
+}
+
 function matchesKeywords(text: string): "ritual" | "workout" | "nutrition" | null {
   const lower = text.toLowerCase();
   // Check ritual first (most specific)
@@ -44,7 +73,7 @@ const SYSTEM_PROMPT = `You are a personal logging assistant. Parse the user's na
 Determine the intent and return ONLY valid JSON (no markdown, no explanation) in one of these shapes:
 
 1. Morning ritual update:
-{"intent":"morning_ritual","rituals":{"pressUps":{"done":true,"reps":15},"squats":{"done":true,"reps":10},"water":{"done":true,"ml":500},"supplements":{"done":true}}}
+{"intent":"morning_ritual","rituals":{"pressUps":{"done":true,"reps":15},"squats":{"done":true,"reps":10},"water":{"done":true},"supplements":{"done":true}}}
 Only include rituals the user actually mentioned. Possible keys: pressUps, squats, water, supplements.
 IMPORTANT: "water" means hydration/drinking water. "supplements" means vitamins/pills/capsules. Do NOT confuse them — if the user says "had my water" or "drank 500ml", that is water, NOT supplements. If they say "took supplements" or "took my vitamins", that is supplements, NOT water.
 
@@ -112,7 +141,7 @@ async function handleMorningRitual(rituals: Record<string, any>): Promise<string
   const parts: string[] = [];
   if (rituals.pressUps?.done) parts.push(`Press-ups: ${rituals.pressUps.reps ?? "done"}`);
   if (rituals.squats?.done) parts.push(`Squats: ${rituals.squats.reps ?? "done"}`);
-  if (rituals.water?.done) parts.push(`Water: ${rituals.water.ml ? `${rituals.water.ml}ml` : "done"}`);
+  if (rituals.water?.done) parts.push("Water: done");
   if (rituals.supplements?.done) parts.push("Supplements: done");
 
   let response = `Morning ritual logged:\n${parts.map((p) => `  ✅ ${p}`).join("\n")}`;
@@ -182,6 +211,18 @@ async function handleNutrition(data: {
 export async function detectAndHandleLog(
   text: string
 ): Promise<{ handled: boolean; response?: string }> {
+  // Step 0: "morning done" shortcut — instant, no LLM call
+  if (isMorningDoneShortcut(text)) {
+    try {
+      const response = await handleMorningDoneShortcut();
+      logger.info("Morning done shortcut handled via Telegram");
+      return { handled: true, response };
+    } catch (error: any) {
+      logger.error({ error: error.message }, "Morning done shortcut error");
+      return { handled: false };
+    }
+  }
+
   // Step 1: Quick keyword gate
   const category = matchesKeywords(text);
   if (!category) return { handled: false };

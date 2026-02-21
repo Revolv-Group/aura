@@ -28,6 +28,7 @@ import {
   Layers,
   DollarSign,
   FlaskConical,
+  Target,
 } from "lucide-react";
 import NavSection, { NavItemConfig } from "./nav-section";
 import VenturesNavSection from "./ventures-nav-section";
@@ -94,6 +95,11 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
         href: "/morning",
         icon: Sun,
         label: "Morning Ritual",
+      },
+      {
+        href: "/plan",
+        icon: Target,
+        label: "Daily Plan",
       },
       {
         href: "/dashboard",

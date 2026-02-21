@@ -71,7 +71,7 @@ router.get("/morning-ritual", async (req: Request, res: Response) => {
           { key: "press_ups", label: "Press-ups", icon: "Dumbbell", hasCount: true, countLabel: "reps", defaultCount: 50, enabled: true },
           { key: "squats", label: "Squats", icon: "Dumbbell", hasCount: true, countLabel: "reps", defaultCount: 50, enabled: true },
           { key: "supplements", label: "Supplements", icon: "Pill", hasCount: false, enabled: true },
-          { key: "water", label: "Drink 500ml Water", icon: "Droplets", hasCount: true, countLabel: "ml", defaultCount: 500, enabled: true },
+          { key: "water", label: "Drink Water", icon: "Droplets", hasCount: false, enabled: true },
         ],
       };
       res.json(defaultConfig);

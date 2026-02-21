@@ -26,6 +26,7 @@ import SettingsIntegrationsPage from "@/pages/settings-integrations";
 import SettingsCategoriesPage from "@/pages/settings-categories";
 import CalendarPage from "@/pages/calendar";
 import MorningRitual from "@/pages/morning-ritual";
+import PlanPage from "@/pages/plan";
 import EveningReview from "@/pages/evening-review";
 import WeeklyPlanning from "@/pages/weekly-planning";
 import FearSetting from "@/pages/fear-setting";
@@ -80,6 +81,8 @@ function Router() {
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/morning" component={MorningRitual} />
             <Route path="/morning/:date" component={MorningRitual} />
+            <Route path="/plan" component={PlanPage} />
+            <Route path="/plan/:date" component={PlanPage} />
             <Route path="/evening" component={EveningReview} />
             <Route path="/evening/:date" component={EveningReview} />
             <Route path="/weekly" component={WeeklyPlanning} />

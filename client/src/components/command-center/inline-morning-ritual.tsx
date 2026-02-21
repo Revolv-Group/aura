@@ -40,7 +40,7 @@ const defaultHabits = [
   { key: "pressUps", label: "Press-ups", icon: Dumbbell, hasCount: true, countLabel: "reps", defaultCount: 50 },
   { key: "squats", label: "Squats", icon: Dumbbell, hasCount: true, countLabel: "reps", defaultCount: 50 },
   { key: "supplements", label: "Supplements", icon: Pill, hasCount: false },
-  { key: "water", label: "Drink 500ml Water", icon: Droplets, hasCount: true, countLabel: "ml", defaultCount: 500 },
+  { key: "water", label: "Drink Water", icon: Droplets, hasCount: false },
 ];
 
 export default function InlineMorningRitual({ day }: InlineMorningRitualProps) {

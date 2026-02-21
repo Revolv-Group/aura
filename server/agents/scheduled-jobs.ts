@@ -291,10 +291,10 @@ registerJobHandler("morning_checkin", async (_agentId: string, agentSlug: string
       else missing.push(label);
     }
     if (done.length === 0 && missing.length === 0) {
-      message = `How's the morning going? Quick update:\n- How many press-ups did you do?\n- How many squats?\n- Have you taken your supplements?\n- Have you had your water?\n\nJust text me naturally, e.g. "Did 20 press ups, 15 squats, took supplements and had my water"`;
+      message = `How's the morning going? Quick update:\n- How many press-ups did you do?\n- How many squats?\n- Have you taken your supplements?\n- Have you had your water?\n\nJust text me naturally, e.g. "Did 20 press ups, 15 squats, took supplements and had my water"\n\nOr just say "morning done" to check everything off!`;
     } else {
       const doneStr = done.length > 0 ? `\n\nAlready done: ${done.join(", ")} ✅` : "";
-      message = `How's the morning going?${doneStr}\n\nStill to do: ${missing.join(", ")}\n\nJust text me what you've completed.`;
+      message = `How's the morning going?${doneStr}\n\nStill to do: ${missing.join(", ")}\n\nJust text me what you've completed.\n\nOr just say "morning done" to check everything off!`;
     }
   }
 
