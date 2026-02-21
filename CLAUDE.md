@@ -166,7 +166,7 @@ days (daily logs)
   └── tasks (scheduled for this day)
   └── healthEntries
   └── nutritionEntries
-  └── morningRituals (JSON: pressUps, squats, supplements, reading)
+  └── morningRituals (JSON: pressUps, squats, supplements, water)
   └── eveningRituals (JSON: review, journal, gratitude, priorities)
   └── tradingJournal (JSON: sessions with P&L)
 
@@ -359,7 +359,7 @@ Daily logs (central hub for each day).
 | `reflectionAm` | text | Morning intention |
 | `reflectionPm` | text | Evening review |
 | `primaryVentureFocus` | fk → ventures | Main venture for the day |
-| `morningRituals` | json | `{ pressUps, squats, supplements, reading }` |
+| `morningRituals` | json | `{ pressUps, squats, supplements, water }` |
 | `eveningRituals` | json | `{ reviewCompleted, journalEntry, gratitude, tomorrowPriorities, windDown }` |
 | `tradingJournal` | json | `{ sessions: [{ timestamp, sessionName, pnl, notes, lessons, emotionalState }] }` |
 
@@ -917,7 +917,7 @@ Daily morning habits tracking at `/morning`.
 - **Press-Ups Counter**: Daily press-up goal and tracking
 - **Squats Counter**: Daily squat goal and tracking
 - **Supplements Checklist**: Daily supplement tracking
-- **Reading Progress**: Pages/time read
+- **Water Intake**: Hydration tracking (500ml target)
 - **Day Planning**: Set top 3 outcomes and one thing to ship
 
 ### 9.3. Evening Review Page
