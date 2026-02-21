@@ -14,8 +14,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { BookOpen, Cloud, Sparkles, FileUp } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookOpen, Cloud, Sparkles, FileUp, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +60,10 @@ export default function KnowledgeHub() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [docToDelete, setDocToDelete] = useState<string | null>(null);
+  const [clipDialogOpen, setClipDialogOpen] = useState(false);
+  const [clipUrl, setClipUrl] = useState("");
+  const [clipVentureId, setClipVentureId] = useState<string>("");
+  const [clipTags, setClipTags] = useState("");
 
   // Fetch all docs
   const { data: allDocs = [], isLoading } = useQuery<Doc[]>({
@@ -97,6 +105,41 @@ export default function KnowledgeHub() {
       });
     },
   });
+
+  // Clip URL mutation
+  const clipMutation = useMutation({
+    mutationFn: async (data: { url: string; ventureId?: string; tags?: string[] }) => {
+      const res = await apiRequest("POST", "/api/docs/clip-url", data);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/docs"] });
+      toast({
+        title: "URL clipped",
+        description: `"${data.title}" saved to Knowledge Hub (${data.wordCount} words)`,
+      });
+      setClipDialogOpen(false);
+      setClipUrl("");
+      setClipVentureId("");
+      setClipTags("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Clip failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleClipSubmit = () => {
+    if (!clipUrl.trim()) return;
+    clipMutation.mutate({
+      url: clipUrl.trim(),
+      ventureId: clipVentureId || undefined,
+      tags: clipTags ? clipTags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
+    });
+  };
 
   // Filter and search logic
   const displayedDocs = useMemo(() => {
@@ -185,6 +228,7 @@ export default function KnowledgeHub() {
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <KnowledgeHubHeader
         onNewDoc={handleNewDoc}
+        onClipUrl={() => setClipDialogOpen(true)}
         onSearch={setSearchQuery}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
@@ -297,6 +341,59 @@ export default function KnowledgeHub() {
             }}
             onCancel={() => setWizardOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Clip URL Dialog */}
+      <Dialog open={clipDialogOpen} onOpenChange={setClipDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clip URL to Knowledge Hub</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="clip-url">URL</Label>
+              <Input
+                id="clip-url"
+                placeholder="https://example.com/article"
+                value={clipUrl}
+                onChange={(e) => setClipUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clip-venture">Venture (optional)</Label>
+              <Select value={clipVentureId} onValueChange={setClipVentureId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select venture..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ventures.map((v: any) => (
+                    <SelectItem key={v.id} value={String(v.id)}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clip-tags">Tags (comma-separated)</Label>
+              <Input
+                id="clip-tags"
+                placeholder="research, ai, marketing"
+                value={clipTags}
+                onChange={(e) => setClipTags(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClipDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleClipSubmit} disabled={!clipUrl.trim() || clipMutation.isPending}>
+              {clipMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Clip
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

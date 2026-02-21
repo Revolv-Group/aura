@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BookOpen, Plus, Search, Grid3x3, List, Table } from "lucide-react";
+import { BookOpen, Plus, Search, Grid3x3, List, Table, LinkIcon } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface KnowledgeHubHeaderProps {
   onNewDoc: () => void;
+  onClipUrl: () => void;
   onSearch: (query: string) => void;
   viewMode: "grid" | "list" | "table";
   onViewModeChange: (mode: "grid" | "list" | "table") => void;
@@ -13,6 +14,7 @@ interface KnowledgeHubHeaderProps {
 
 export function KnowledgeHubHeader({
   onNewDoc,
+  onClipUrl,
   onSearch,
   viewMode,
   onViewModeChange,
@@ -36,10 +38,16 @@ export function KnowledgeHubHeader({
             Your documented wisdom and processes
           </p>
         </div>
-        <Button onClick={onNewDoc} size="sm" className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          New Document
-        </Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button onClick={onClipUrl} size="sm" variant="outline" className="flex-1 sm:flex-initial">
+            <LinkIcon className="h-4 w-4 mr-2" />
+            Clip URL
+          </Button>
+          <Button onClick={onNewDoc} size="sm" className="flex-1 sm:flex-initial">
+            <Plus className="h-4 w-4 mr-2" />
+            New Document
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">

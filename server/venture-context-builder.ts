@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import { logger } from "./logger";
+import { hybridSearch } from "./vector-search";
 import type { Venture, Project, Task, Doc, Phase, CaptureItem } from "@shared/schema";
 
 /**
@@ -224,54 +225,44 @@ export async function buildContextForPrompt(
 
 /**
  * Search venture docs for relevant content based on a query
- * Returns relevant document excerpts for RAG-style context injection
+ * Uses hybrid search (vector 70% + keyword 30%) via the RAG pipeline
  */
 export async function searchVentureKnowledge(
   ventureId: string,
   query: string,
   limit: number = 5
 ): Promise<{ doc: Doc; relevance: number; excerpt: string }[]> {
-  const docs = await storage.getDocs({ ventureId, status: 'active' });
+  try {
+    const results = await hybridSearch(query, { ventureId, limit });
 
-  // Simple keyword-based relevance scoring
-  // In production, you'd use embeddings and vector similarity
-  const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    return results.map(r => ({
+      doc: {
+        id: r.id,
+        title: r.title,
+        type: r.metadata?.docType as string || 'page',
+      } as unknown as Doc,
+      relevance: r.similarity,
+      excerpt: r.content?.slice(0, 300) || '',
+    }));
+  } catch (error) {
+    logger.warn({ error, ventureId, query }, 'Hybrid search failed, falling back to keyword search');
+    // Fallback to simple keyword search
+    const docs = await storage.getDocs({ ventureId, status: 'active' });
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
 
-  const scoredDocs = docs
-    .map(doc => {
-      const titleLower = doc.title.toLowerCase();
-      const bodyLower = (doc.body || '').toLowerCase();
-      const tagsLower = (doc.tags || []).join(' ').toLowerCase();
-
-      let score = 0;
-      for (const term of queryTerms) {
-        if (titleLower.includes(term)) score += 3;
-        if (bodyLower.includes(term)) score += 1;
-        if (tagsLower.includes(term)) score += 2;
-      }
-
-      // Generate excerpt around first match
-      let excerpt = '';
-      if (doc.body && score > 0) {
-        const bodyLower = doc.body.toLowerCase();
+    return docs
+      .map(doc => {
+        let score = 0;
         for (const term of queryTerms) {
-          const idx = bodyLower.indexOf(term);
-          if (idx >= 0) {
-            const start = Math.max(0, idx - 100);
-            const end = Math.min(doc.body.length, idx + 300);
-            excerpt = (start > 0 ? '...' : '') + doc.body.slice(start, end) + (end < doc.body.length ? '...' : '');
-            break;
-          }
+          if (doc.title.toLowerCase().includes(term)) score += 3;
+          if ((doc.body || '').toLowerCase().includes(term)) score += 1;
         }
-      }
-
-      return { doc, relevance: score, excerpt: excerpt || doc.body?.slice(0, 200) || '' };
-    })
-    .filter(item => item.relevance > 0)
-    .sort((a, b) => b.relevance - a.relevance)
-    .slice(0, limit);
-
-  return scoredDocs;
+        return { doc, relevance: score, excerpt: doc.body?.slice(0, 200) || '' };
+      })
+      .filter(item => item.relevance > 0)
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, limit);
+  }
 }
 
 /**

@@ -41,6 +41,7 @@ import aiDocsRoutes from "./ai-docs";
 import aiLearningRoutes from "./ai-learning";
 import ventureLabRoutes from "./venture-lab";
 import ragRoutes from "./rag";
+import webClipRoutes from "./web-clip";
 import knowledgeFilesRoutes from "./knowledge-files";
 import memoryRoutes from "./memory";
 import agentRoutes from "./agents";
@@ -124,6 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // KNOWLEDGE & DOCUMENTS
   // ============================================================================
   app.use('/api/docs', docsRoutes);
+  app.use('/api/docs', webClipRoutes);
   app.use('/api/docs/ai', aiDocsRoutes);
   app.use('/api/ai/learning', aiLearningRoutes);
   app.use('/api/attachments', attachmentsRoutes);

@@ -8,6 +8,7 @@
 import * as modelManager from "../../model-manager";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
+import { buildLifeContext } from "./life-context";
 import type { AgentToolResult } from "../types";
 
 // ============================================================================
@@ -78,6 +79,14 @@ async function gatherDailyBriefingData(): Promise<string> {
     }
   } catch {
     // Silent
+  }
+
+  // Append life context (health, nutrition, day record)
+  try {
+    const lifeContext = await buildLifeContext();
+    sections.push("\n" + lifeContext);
+  } catch {
+    // Non-critical
   }
 
   return sections.join("\n");

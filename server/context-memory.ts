@@ -350,7 +350,7 @@ export async function injectContext(
     maxTokens = 4000,
     includeTeachings = true,
     includeTasks = true,
-    useVectorSearch = false,
+    useVectorSearch = true,
   } = options;
 
   // Extract query from last user message

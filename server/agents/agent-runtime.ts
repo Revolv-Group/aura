@@ -43,6 +43,8 @@ import { buildMemoryContext, buildRelevantMemoryContext, storeMemory, searchMemo
 import { extractConversationLearnings, storeTaskOutcomeLearning } from "./learning-extractor";
 import { generateProject, generateCode, listGeneratedProjects } from "./tools/code-generator";
 import { deploy, getDeploymentHistory, getDeploymentStatus } from "./tools/deployer";
+import { hybridSearch } from "../vector-search";
+import { buildLifeContext } from "./tools/life-context";
 
 // Lazy DB
 let db: any = null;
@@ -432,6 +434,41 @@ function buildCoreTools(agent: Agent, permissions: string[]): OpenAI.Chat.ChatCo
     });
   }
 
+  // Clip URL to knowledge base
+  if (availableTools.includes("clip_to_knowledge_base") || availableTools.includes("search_knowledge_base")) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "clip_to_knowledge_base",
+        description: "Save a web article/URL to the knowledge base for future reference. Extracts readable content, creates a doc, and triggers embedding for semantic search.",
+        parameters: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "The URL to clip" },
+            tags: { type: "array", items: { type: "string" }, description: "Optional tags for the doc" },
+            type: { type: "string", enum: ["reference", "research", "page"], description: "Doc type (default: reference)" },
+          },
+          required: ["url"],
+        },
+      },
+    });
+  }
+
+  // Life context
+  if (availableTools.includes("get_life_context") || availableTools.includes("search_knowledge_base")) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "get_life_context",
+        description: "Get current life data: today's health (sleep, energy, mood, workout), nutrition totals, day record (top 3 outcomes, primary venture), and recent task completion rate.",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+      },
+    });
+  }
+
   // Deployment
   if (availableTools.includes("deploy")) {
     tools.push({
@@ -514,23 +551,20 @@ async function executeTool(
       }
 
       case "search_knowledge_base": {
-        const docs = await storage.getDocs({});
-        const query = args.query.toLowerCase();
-        const matches = docs
-          .filter((d: any) =>
-            d.title?.toLowerCase().includes(query) ||
-            d.body?.toLowerCase().includes(query) ||
-            (d.tags as string[])?.some((t: string) => t.toLowerCase().includes(query))
-          )
-          .slice(0, 5);
+        const searchResults = await hybridSearch(args.query, {
+          ventureId: agent.ventureId || undefined,
+          limit: 5,
+        });
 
         return {
           result: JSON.stringify(
-            matches.map((d: any) => ({
-              id: d.id,
-              title: d.title,
-              type: d.type,
-              excerpt: d.body?.slice(0, 200),
+            searchResults.map((r) => ({
+              id: r.id,
+              title: r.title,
+              type: r.type,
+              excerpt: r.content?.slice(0, 300),
+              similarity: Math.round(r.similarity * 100) / 100,
+              source: r.metadata?.docId || r.id,
             }))
           ),
         };
@@ -795,6 +829,44 @@ async function executeTool(
           default:
             return { result: `Unknown code_generate action: ${args.action}` };
         }
+      }
+
+      case "clip_to_knowledge_base": {
+        const { clipUrl } = await import("../web-clipper");
+        const clipped = await clipUrl(args.url);
+
+        const doc = await storage.createDoc({
+          title: clipped.title,
+          body: clipped.body,
+          type: args.type || "reference",
+          domain: "personal",
+          ventureId: agent.ventureId,
+          status: "active",
+          tags: args.tags || [],
+          metadata: clipped.metadata,
+        });
+
+        // Trigger embedding in background
+        const { processDocumentNow } = await import("../embedding-jobs");
+        processDocumentNow(doc.id).catch((err: any) =>
+          logger.debug({ err: err.message }, "Background embedding failed (non-critical)")
+        );
+
+        return {
+          result: `Clipped "${clipped.title}" to knowledge base (doc ID: ${doc.id}). Embedding will be generated shortly.`,
+          action: {
+            actionType: "clip_to_knowledge_base",
+            entityType: "doc",
+            entityId: doc.id,
+            parameters: { url: args.url, title: clipped.title },
+            status: "success",
+          },
+        };
+      }
+
+      case "get_life_context": {
+        const context = await buildLifeContext();
+        return { result: context };
       }
 
       case "deploy": {

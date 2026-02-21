@@ -2,7 +2,8 @@ import OpenAI from "openai";
 import { storage } from "./storage";
 import { logger } from "./logger";
 import * as modelManager from "./model-manager";
-import { getCachedOrBuildContext, searchVentureKnowledge } from "./venture-context-builder";
+import { getCachedOrBuildContext } from "./venture-context-builder";
+import { hybridSearch } from "./vector-search";
 import type { Venture, AiAgentPrompt, VentureConversation, InsertVentureAgentAction, CaptureItem } from "@shared/schema";
 
 // Initialize OpenRouter with OpenAI-compatible API
@@ -469,28 +470,23 @@ IMPORTANT INSTRUCTIONS:
         }
 
         case "search_knowledge_base": {
-          const results = await searchVentureKnowledge(this.ventureId, args.query, 5);
+          const searchResults = await hybridSearch(args.query, {
+            ventureId: this.ventureId,
+            limit: 5,
+          });
 
+          let filtered = searchResults;
           if (args.docType) {
-            const filtered = results.filter(r => r.doc.type === args.docType);
-            return {
-              result: JSON.stringify(filtered.map(r => ({
-                id: r.doc.id,
-                title: r.doc.title,
-                type: r.doc.type,
-                relevance: r.relevance,
-                excerpt: r.excerpt,
-              }))),
-            };
+            filtered = searchResults.filter(r => r.metadata?.docType === args.docType);
           }
 
           return {
-            result: JSON.stringify(results.map(r => ({
-              id: r.doc.id,
-              title: r.doc.title,
-              type: r.doc.type,
-              relevance: r.relevance,
-              excerpt: r.excerpt,
+            result: JSON.stringify(filtered.map(r => ({
+              id: r.id,
+              title: r.title,
+              type: r.type,
+              similarity: Math.round(r.similarity * 100) / 100,
+              excerpt: r.content?.slice(0, 300),
             }))),
           };
         }
