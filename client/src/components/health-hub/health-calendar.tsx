@@ -35,9 +35,9 @@ const getMoodEmoji = (mood: string | null): string => {
 
 const getEnergyColor = (energyLevel: number | null): string => {
   if (!energyLevel) return "bg-muted";
-  if (energyLevel <= 2) return "bg-rose-100 hover:bg-rose-200 border-rose-200";
-  if (energyLevel === 3) return "bg-amber-100 hover:bg-amber-200 border-amber-200";
-  return "bg-emerald-100 hover:bg-emerald-200 border-emerald-200";
+  if (energyLevel <= 2) return "bg-rose-100 hover:bg-rose-200 border-rose-200 dark:bg-rose-900/30 dark:hover:bg-rose-900/40 dark:border-rose-800";
+  if (energyLevel === 3) return "bg-amber-100 hover:bg-amber-200 border-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 dark:border-amber-800";
+  return "bg-emerald-100 hover:bg-emerald-200 border-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 dark:border-emerald-800";
 };
 
 export default function HealthCalendar({ healthEntries, currentMonth, onDayClick }: HealthCalendarProps) {
@@ -125,15 +125,15 @@ export default function HealthCalendar({ healthEntries, currentMonth, onDayClick
         {/* Legend */}
         <div className="mt-6 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-rose-100 border border-rose-200"></div>
+            <div className="w-4 h-4 rounded bg-rose-100 border border-rose-200 dark:bg-rose-900/30 dark:border-rose-800"></div>
             <span className="text-muted-foreground">Low Energy</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-amber-100 border border-amber-200"></div>
+            <div className="w-4 h-4 rounded bg-amber-100 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-800"></div>
             <span className="text-muted-foreground">Medium Energy</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-100 border border-emerald-200"></div>
+            <div className="w-4 h-4 rounded bg-emerald-100 border border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"></div>
             <span className="text-muted-foreground">High Energy</span>
           </div>
         </div>

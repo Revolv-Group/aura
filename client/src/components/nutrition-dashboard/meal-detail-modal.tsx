@@ -49,10 +49,10 @@ const CONTEXT_ICONS = {
 };
 
 const MEAL_TYPE_COLORS = {
-  breakfast: "bg-amber-100 text-amber-800 border-amber-300",
-  lunch: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  dinner: "bg-sky-100 text-sky-800 border-sky-300",
-  snack: "bg-violet-100 text-violet-800 border-violet-300",
+  breakfast: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700",
+  lunch: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700",
+  dinner: "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-700",
+  snack: "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700",
 };
 
 export default function MealDetailModal({ open, onOpenChange, meal, onEdit }: MealDetailModalProps) {
@@ -138,19 +138,19 @@ export default function MealDetailModal({ open, onOpenChange, meal, onEdit }: Me
                   <p className="text-xl font-bold">{meal.calories ?? "—"}</p>
                   <p className="text-xs text-muted-foreground">kcal</p>
                 </div>
-                <div className="bg-rose-50 rounded-lg p-3">
+                <div className="bg-rose-50 dark:bg-rose-950/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">Protein</p>
-                  <p className="text-xl font-bold text-rose-700">{meal.proteinG ?? "—"}</p>
+                  <p className="text-xl font-bold text-rose-700 dark:text-rose-400">{meal.proteinG ?? "—"}</p>
                   <p className="text-xs text-muted-foreground">grams</p>
                 </div>
-                <div className="bg-sky-50 rounded-lg p-3">
+                <div className="bg-sky-50 dark:bg-sky-950/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">Carbs</p>
-                  <p className="text-xl font-bold text-sky-700">{meal.carbsG ?? "—"}</p>
+                  <p className="text-xl font-bold text-sky-700 dark:text-sky-400">{meal.carbsG ?? "—"}</p>
                   <p className="text-xs text-muted-foreground">grams</p>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-3">
+                <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">Fats</p>
-                  <p className="text-xl font-bold text-amber-700">{meal.fatsG ?? "—"}</p>
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{meal.fatsG ?? "—"}</p>
                   <p className="text-xs text-muted-foreground">grams</p>
                 </div>
               </div>

@@ -227,10 +227,10 @@ export function ForesightDashboard({
                           <Badge
                             variant="secondary"
                             className={`text-xs ${
-                              signal.signalStrength === 'weak' ? 'bg-gray-100' :
-                              signal.signalStrength === 'emerging' ? 'bg-blue-100' :
-                              signal.signalStrength === 'strong' ? 'bg-orange-100' :
-                              'bg-purple-100'
+                              signal.signalStrength === 'weak' ? 'bg-gray-100 dark:bg-gray-800' :
+                              signal.signalStrength === 'emerging' ? 'bg-blue-100 dark:bg-blue-900/30' :
+                              signal.signalStrength === 'strong' ? 'bg-orange-100 dark:bg-orange-900/30' :
+                              'bg-purple-100 dark:bg-purple-900/30'
                             }`}
                           >
                             {signal.signalStrength}

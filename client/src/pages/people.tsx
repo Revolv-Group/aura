@@ -470,7 +470,7 @@ export default function PeoplePage() {
           <TabsTrigger value="stale" className="relative">
             Stale
             {stalePeople.length > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] px-1 bg-orange-100 text-orange-800">
+              <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] px-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
                 {stalePeople.length}
               </Badge>
             )}

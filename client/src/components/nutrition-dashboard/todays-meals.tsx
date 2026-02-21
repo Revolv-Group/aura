@@ -30,10 +30,10 @@ interface TodaysMealsProps {
 }
 
 const MEAL_TYPE_COLORS = {
-  breakfast: "bg-amber-100 text-amber-800 border-amber-300",
-  lunch: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  dinner: "bg-sky-100 text-sky-800 border-sky-300",
-  snack: "bg-violet-100 text-violet-800 border-violet-300",
+  breakfast: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700",
+  lunch: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700",
+  dinner: "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-700",
+  snack: "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700",
 };
 
 const CONTEXT_ICONS = {

@@ -122,19 +122,19 @@ export default function WeeklySummary({ meals }: WeeklySummaryProps) {
             <p className="text-2xl font-bold">{avgCalories.toFixed(0)}</p>
             <p className="text-xs text-muted-foreground">kcal/day</p>
           </div>
-          <div className="bg-rose-50 rounded-lg p-4">
+          <div className="bg-rose-50 dark:bg-rose-950/30 rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">Avg Protein</p>
-            <p className="text-2xl font-bold text-rose-600">{avgProtein.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">{avgProtein.toFixed(1)}</p>
             <p className="text-xs text-muted-foreground">g/day</p>
           </div>
-          <div className="bg-sky-50 rounded-lg p-4">
+          <div className="bg-sky-50 dark:bg-sky-950/30 rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">Avg Carbs</p>
-            <p className="text-2xl font-bold text-sky-600">{avgCarbs.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-sky-600 dark:text-sky-400">{avgCarbs.toFixed(1)}</p>
             <p className="text-xs text-muted-foreground">g/day</p>
           </div>
-          <div className="bg-amber-50 rounded-lg p-4">
+          <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">Avg Fats</p>
-            <p className="text-2xl font-bold text-amber-600">{avgFats.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{avgFats.toFixed(1)}</p>
             <p className="text-xs text-muted-foreground">g/day</p>
           </div>
         </div>

@@ -58,9 +58,9 @@ const CATEGORIES = [
 ];
 
 const STATUSES = [
-  { value: "green", label: "Green", icon: CheckCircle2, color: "text-green-600 bg-green-100" },
-  { value: "yellow", label: "Yellow", icon: AlertCircle, color: "text-yellow-600 bg-yellow-100" },
-  { value: "red", label: "Red", icon: AlertTriangle, color: "text-red-600 bg-red-100" },
+  { value: "green", label: "Green", icon: CheckCircle2, color: "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400" },
+  { value: "yellow", label: "Yellow", icon: AlertCircle, color: "text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  { value: "red", label: "Red", icon: AlertTriangle, color: "text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400" },
 ];
 
 export function IndicatorList({ ventureId }: IndicatorListProps) {
@@ -188,7 +188,7 @@ export function IndicatorList({ ventureId }: IndicatorListProps) {
 
   const getStatusColor = (status: string | null) => {
     const statusConfig = STATUSES.find((s) => s.value === status);
-    return statusConfig?.color || "text-gray-600 bg-gray-100";
+    return statusConfig?.color || "text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400";
   };
 
   const filteredIndicators = filterStatus === "all"
