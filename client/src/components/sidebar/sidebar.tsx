@@ -2,33 +2,24 @@ import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Briefcase,
   Heart,
-  Apple,
   BookOpen,
-  Focus,
   Settings,
   Sun,
   Moon,
-  ShoppingCart,
-  Library,
   ChevronLeft,
   ChevronRight,
   User,
   X,
   Zap,
   TrendingUp,
-  Bot,
   Users,
   CheckSquare,
   Sparkles,
   Calendar,
-  CalendarDays,
   Plug,
   Layers,
   DollarSign,
-  FlaskConical,
-  Target,
 } from "lucide-react";
 import NavSection, { NavItemConfig } from "./nav-section";
 import VenturesNavSection from "./ventures-nav-section";
@@ -92,19 +83,14 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
     label: "Daily",
     items: [
       {
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        label: "Dashboard",
+      },
+      {
         href: "/morning",
         icon: Sun,
         label: "Morning Ritual",
-      },
-      {
-        href: "/plan",
-        icon: Target,
-        label: "Daily Plan",
-      },
-      {
-        href: "/dashboard",
-        icon: LayoutDashboard,
-        label: "Command Center",
       },
       {
         href: "/capture",
@@ -121,35 +107,15 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
         icon: Moon,
         label: "Evening Review",
       },
-      {
-        href: "/weekly",
-        icon: CalendarDays,
-        label: "Weekly Planning",
-      },
     ],
   },
   {
     label: "Work",
     items: [
       {
-        href: "/venture-lab",
-        icon: FlaskConical,
-        label: "Venture Lab",
-      },
-      {
         href: "/tasks",
         icon: CheckSquare,
-        label: "All Tasks",
-      },
-      {
-        href: "/trading",
-        icon: TrendingUp,
-        label: "Trading",
-      },
-      {
-        href: "/deep-work",
-        icon: Focus,
-        label: "Deep Work",
+        label: "Tasks",
       },
       {
         href: "/knowledge",
@@ -157,14 +123,14 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
         label: "Knowledge",
       },
       {
-        href: "/ai-chat",
-        icon: Bot,
-        label: "AI Assistant",
+        href: "/trading",
+        icon: TrendingUp,
+        label: "Trading",
       },
       {
         href: "/agents",
         icon: Users,
-        label: "Agent HQ",
+        label: "Agents",
       },
     ],
   },
@@ -172,39 +138,19 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
     label: "Life",
     items: [
       {
-        href: "/people",
-        icon: User,
-        label: "People",
-      },
-      {
-        href: "/shopping",
-        icon: ShoppingCart,
-        label: "Shopping",
-      },
-      {
-        href: "/books",
-        icon: Library,
-        label: "Books",
+        href: "/health-hub",
+        icon: Heart,
+        label: "Health",
       },
       {
         href: "/finance",
         icon: DollarSign,
         label: "Finance",
       },
-    ],
-  },
-  {
-    label: "Wellness",
-    items: [
       {
-        href: "/health-hub",
-        icon: Heart,
-        label: "Health Hub",
-      },
-      {
-        href: "/nutrition",
-        icon: Apple,
-        label: "Nutrition",
+        href: "/people",
+        icon: User,
+        label: "People",
       },
     ],
   },

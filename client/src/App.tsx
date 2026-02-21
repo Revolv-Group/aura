@@ -11,11 +11,9 @@ import TaskDetailModal from "@/components/task-detail-modal";
 import DecisionQuickCapture from "@/components/decision-quick-capture";
 import Layout from "@/components/layout";
 import Landing from "@/pages/landing";
-import CommandCenter from "@/pages/command-center";
 import VentureHQ from "@/pages/venture-hq";
 import VentureDetail from "@/pages/venture-detail";
 import HealthHub from "@/pages/health-hub";
-import NutritionDashboard from "@/pages/nutrition-dashboard";
 import KnowledgeHub from "@/pages/knowledge-hub";
 import DocDetail from "@/pages/doc-detail";
 import DeepWork from "@/pages/deep-work";
@@ -26,10 +24,8 @@ import SettingsIntegrationsPage from "@/pages/settings-integrations";
 import SettingsCategoriesPage from "@/pages/settings-categories";
 import CalendarPage from "@/pages/calendar";
 import MorningRitual from "@/pages/morning-ritual";
-import PlanPage from "@/pages/plan";
 import EveningReview from "@/pages/evening-review";
 import WeeklyPlanning from "@/pages/weekly-planning";
-import FearSetting from "@/pages/fear-setting";
 import Shopping from "@/pages/shopping";
 import Books from "@/pages/books";
 import Finance from "@/pages/finance";
@@ -69,7 +65,6 @@ function Router() {
             <Route path="/ventures/:id" component={VentureDetail} />
             <Route path="/venture-lab" component={VentureLab} />
             <Route path="/health-hub" component={HealthHub} />
-            <Route path="/nutrition" component={NutritionDashboard} />
             <Route path="/knowledge" component={KnowledgeHub} />
             <Route path="/knowledge/:id" component={DocDetail} />
             <Route path="/deep-work" component={DeepWork} />
@@ -81,19 +76,15 @@ function Router() {
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/morning" component={MorningRitual} />
             <Route path="/morning/:date" component={MorningRitual} />
-            <Route path="/plan" component={PlanPage} />
-            <Route path="/plan/:date" component={PlanPage} />
             <Route path="/evening" component={EveningReview} />
             <Route path="/evening/:date" component={EveningReview} />
             <Route path="/weekly" component={WeeklyPlanning} />
-            <Route path="/fear-setting" component={FearSetting} />
             <Route path="/shopping" component={Shopping} />
             <Route path="/books" component={Books} />
             <Route path="/finance" component={Finance} />
             <Route path="/people" component={PeoplePage} />
             <Route path="/capture" component={CapturePage} />
             <Route path="/trading" component={TradingPage} />
-            <Route path="/command-center-v1" component={CommandCenter} />
             <Route path="/ai-chat" component={AiChat} />
             <Route path="/tasks" component={AllTasks} />
             <Route path="/agents" component={AgentsPage} />

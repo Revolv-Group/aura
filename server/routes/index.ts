@@ -37,7 +37,6 @@ import aiChatRoutes from "./ai-chat";
 import foresightRoutes from "./foresight";
 import fearSettingsRoutes from "./fear-settings";
 import decisionMemoriesRoutes from "./decision-memories";
-import arc2026Routes from "./arc-2026";
 import aiDocsRoutes from "./ai-docs";
 import aiLearningRoutes from "./ai-learning";
 import ventureLabRoutes from "./venture-lab";
@@ -208,12 +207,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // FILE UPLOADS
   // ============================================================================
   app.use('/api', uploadRoutes);
-
-  // ============================================================================
-  // SETUP UTILITIES
-  // One-time setup endpoints for initializing structures like 2026 Arc
-  // ============================================================================
-  app.use('/api/setup', arc2026Routes);
 
   const httpServer = createServer(app);
   return httpServer;

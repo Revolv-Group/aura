@@ -9,7 +9,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -23,27 +22,19 @@ import {
   Circle,
   Target,
   Rocket,
-  Heart,
   ListTodo,
   ChevronRight,
   ChevronLeft,
   Trophy,
   TrendingUp,
-  AlertCircle,
   Calendar,
-  BookOpen,
   Timer,
   Utensils,
-  Languages,
-  LineChart,
-  Cpu,
-  GraduationCap
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link, useRoute, useLocation } from "wouter";
 import { useDecisionModal } from "@/lib/decision-modal-store";
-import { DecisionsDueSection } from "@/components/decision-close-loop";
 import { Lightbulb } from "lucide-react";
 
 interface Task {
@@ -79,28 +70,10 @@ interface Day {
   eveningRituals: {
     reviewCompleted?: boolean;
     journalEntry?: string;
-    gratitude?: string[];
     tomorrowPriorities?: string[];
     fastingHours?: number;
     fastingCompleted?: boolean;
     deepWorkHours?: number;
-    learningBlock?: {
-      arabic?: boolean;
-      trading?: boolean;
-      ai?: boolean;
-    };
-    windDown?: {
-      clearInbox?: boolean;
-      rescheduleUnfinished?: boolean;
-      supplements?: boolean;
-      bedBy2am?: boolean;
-      completedAt?: string;
-    };
-    readingLog?: {
-      bookId: string;
-      bookTitle: string;
-      pagesRead: number;
-    };
     completedAt?: string;
   } | null;
 }
@@ -112,38 +85,6 @@ interface HealthEntry {
   workoutDone: boolean;
   steps: number | null;
   mood: string | null;
-}
-
-interface Book {
-  id: string;
-  title: string;
-  author: string | null;
-  status: "to_read" | "reading" | "finished";
-}
-
-interface ReadingLog {
-  bookId: string;
-  bookTitle: string;
-  pagesRead: number;
-}
-
-interface DecisionMemory {
-  id: string;
-  context: string;
-  decision: string;
-  reasoning: string | null;
-  tags: string[] | null;
-  followUpAt: string | null;
-  outcome: string | null;
-  outcomeNotes: string | null;
-  outcomeRecordedAt: string | null;
-  createdAt: string;
-  derived: {
-    canonicalSummary?: string;
-    archetype?: string;
-    riskLevel?: string;
-    reversibility?: string;
-  } | null;
 }
 
 export default function EveningReview() {
@@ -179,26 +120,13 @@ export default function EveningReview() {
 
   const [review, setReview] = useState({
     reflectionPm: "",
-    gratitude: ["", "", ""],
     tomorrowPriorities: ["", "", ""],
     reviewCompleted: false,
     fastingHours: 0,
     deepWorkHours: 0,
-    learningBlock: {
-      arabic: false,
-      trading: false,
-      ai: false,
-    },
-    windDown: {
-      clearInbox: false,
-      rescheduleUnfinished: false,
-      supplements: false,
-      bedBy2am: false,
-    },
   });
 
   const [top3Outcomes, setTop3Outcomes] = useState<Top3Outcome[]>([]);
-  const [readingLog, setReadingLog] = useState<ReadingLog | null>(null);
 
   // Fetch the selected day's data
   const { data: dayData, isLoading: isDayLoading } = useQuery<Day>({
@@ -244,41 +172,6 @@ export default function EveningReview() {
     },
   });
 
-  // Fetch books for reading tracker (filter to "reading" status)
-  const { data: books = [] } = useQuery<Book[]>({
-    queryKey: ["/api/books"],
-  });
-
-  const readingBooks = Array.isArray(books)
-    ? books.filter((b) => b.status === "reading")
-    : [];
-
-  // Fetch decisions due for follow-up (only show on today's review)
-  const { data: dueDecisions = [], refetch: refetchDueDecisions } = useQuery<DecisionMemory[]>({
-    queryKey: ["/api/decision-memories/due"],
-    queryFn: async () => {
-      const res = await fetch("/api/decision-memories/due", { credentials: "include" });
-      return await res.json();
-    },
-    enabled: isViewingToday,
-  });
-
-  // Fetch decisions eligible for early signal check
-  const { data: earlyCheckDecisions = [], refetch: refetchEarlyCheck } = useQuery<DecisionMemory[]>({
-    queryKey: ["/api/decision-memories/early-check"],
-    queryFn: async () => {
-      const res = await fetch("/api/decision-memories/early-check", { credentials: "include" });
-      return await res.json();
-    },
-    enabled: isViewingToday,
-  });
-
-  // Handler for when a decision is closed
-  const handleDecisionClosed = () => {
-    refetchDueDecisions();
-    refetchEarlyCheck();
-  };
-
   // P0/P1 tasks available for all priority slots
   const priorityTasks = Array.isArray(allTasks) ? allTasks : [];
 
@@ -288,62 +181,30 @@ export default function EveningReview() {
   useEffect(() => {
     setReview({
       reflectionPm: "",
-      gratitude: ["", "", ""],
       tomorrowPriorities: ["", "", ""],
       reviewCompleted: false,
       fastingHours: 0,
       deepWorkHours: 0,
-      learningBlock: {
-        arabic: false,
-        trading: false,
-        ai: false,
-      },
-      windDown: {
-        clearInbox: false,
-        rescheduleUnfinished: false,
-        supplements: false,
-        bedBy2am: false,
-      },
     });
     setTop3Outcomes([]);
-    setReadingLog(null);
   }, [selectedDate]);
 
   // Load existing data when day data arrives
   useEffect(() => {
     if (dayData) {
-      // Ensure gratitude and tomorrowPriorities are arrays
-      const gratitudeData = dayData.eveningRituals?.gratitude;
       const prioritiesData = dayData.eveningRituals?.tomorrowPriorities;
 
       setReview({
         reflectionPm: dayData.reflectionPm || "",
-        gratitude: Array.isArray(gratitudeData) ? gratitudeData : ["", "", ""],
         tomorrowPriorities: Array.isArray(prioritiesData) ? prioritiesData : ["", "", ""],
         reviewCompleted: dayData.eveningRituals?.reviewCompleted || false,
         fastingHours: dayData.eveningRituals?.fastingHours || 0,
         deepWorkHours: dayData.eveningRituals?.deepWorkHours || 0,
-        learningBlock: {
-          arabic: dayData.eveningRituals?.learningBlock?.arabic ?? false,
-          trading: dayData.eveningRituals?.learningBlock?.trading ?? false,
-          ai: dayData.eveningRituals?.learningBlock?.ai ?? false,
-        },
-        windDown: {
-          clearInbox: dayData.eveningRituals?.windDown?.clearInbox ?? false,
-          rescheduleUnfinished: dayData.eveningRituals?.windDown?.rescheduleUnfinished ?? false,
-          supplements: dayData.eveningRituals?.windDown?.supplements ?? false,
-          bedBy2am: dayData.eveningRituals?.windDown?.bedBy2am ?? false,
-        },
       });
 
       // Load top3Outcomes
       if (Array.isArray(dayData.top3Outcomes)) {
         setTop3Outcomes(dayData.top3Outcomes);
-      }
-
-      // Load reading log
-      if (dayData.eveningRituals?.readingLog) {
-        setReadingLog(dayData.eveningRituals.readingLog);
       }
     }
   }, [dayData]);
@@ -365,21 +226,10 @@ export default function EveningReview() {
       const eveningRituals = {
         reviewCompleted: true,
         journalEntry: review.reflectionPm,
-        gratitude: review.gratitude.filter(g => g.trim()),
         tomorrowPriorities: review.tomorrowPriorities.filter(p => p.trim()),
         fastingHours: review.fastingHours || undefined,
         fastingCompleted: review.fastingHours >= 16,
         deepWorkHours: review.deepWorkHours || undefined,
-        learningBlock: review.learningBlock,
-        windDown: {
-          ...review.windDown,
-          completedAt: Object.values(review.windDown).some(v => v === true)
-            ? new Date().toISOString()
-            : undefined,
-        },
-        readingLog: readingLog && readingLog.bookId && readingLog.pagesRead > 0
-          ? readingLog
-          : undefined,
         completedAt: new Date().toISOString(),
       };
 
@@ -418,12 +268,6 @@ export default function EveningReview() {
 
   const handleSave = () => {
     saveMutation.mutate();
-  };
-
-  const updateGratitude = (index: number, value: string) => {
-    const newGratitude = [...review.gratitude];
-    newGratitude[index] = value;
-    setReview({ ...review, gratitude: newGratitude });
   };
 
   const updatePriority = (index: number, value: string) => {
@@ -526,7 +370,7 @@ export default function EveningReview() {
         </div>
       </div>
 
-      {/* Day Summary */}
+      {/* 1. Today's Summary */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -625,7 +469,7 @@ export default function EveningReview() {
         </CardContent>
       </Card>
 
-      {/* Daily Metrics - Fasting & Deep Work */}
+      {/* 2. Daily Metrics - Fasting & Deep Work */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -707,258 +551,7 @@ export default function EveningReview() {
         </CardContent>
       </Card>
 
-      {/* Learning Block */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GraduationCap className="h-5 w-5 text-blue-500" />
-            Learning Block
-          </CardTitle>
-          <CardDescription>
-            Did you spend time on your 3 learning tracks today? (15 min each)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Arabic */}
-            <div className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-              <Checkbox
-                id="learning-arabic"
-                checked={review.learningBlock.arabic}
-                onCheckedChange={(checked) =>
-                  setReview({
-                    ...review,
-                    learningBlock: { ...review.learningBlock, arabic: checked as boolean },
-                  })
-                }
-              />
-              <div className="flex items-center gap-2 flex-1">
-                <Languages className="h-5 w-5 text-emerald-500" />
-                <Label htmlFor="learning-arabic" className="font-medium cursor-pointer">
-                  Arabic
-                </Label>
-              </div>
-              {review.learningBlock.arabic && (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              )}
-            </div>
-
-            {/* Trading */}
-            <div className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-              <Checkbox
-                id="learning-trading"
-                checked={review.learningBlock.trading}
-                onCheckedChange={(checked) =>
-                  setReview({
-                    ...review,
-                    learningBlock: { ...review.learningBlock, trading: checked as boolean },
-                  })
-                }
-              />
-              <div className="flex items-center gap-2 flex-1">
-                <LineChart className="h-5 w-5 text-amber-500" />
-                <Label htmlFor="learning-trading" className="font-medium cursor-pointer">
-                  Trading
-                </Label>
-              </div>
-              {review.learningBlock.trading && (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              )}
-            </div>
-
-            {/* AI */}
-            <div className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-              <Checkbox
-                id="learning-ai"
-                checked={review.learningBlock.ai}
-                onCheckedChange={(checked) =>
-                  setReview({
-                    ...review,
-                    learningBlock: { ...review.learningBlock, ai: checked as boolean },
-                  })
-                }
-              />
-              <div className="flex items-center gap-2 flex-1">
-                <Cpu className="h-5 w-5 text-purple-500" />
-                <Label htmlFor="learning-ai" className="font-medium cursor-pointer">
-                  AI
-                </Label>
-              </div>
-              {review.learningBlock.ai && (
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-              )}
-            </div>
-          </div>
-
-          {/* Progress indicator */}
-          <div className="pt-4 mt-4 border-t">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Learning progress</span>
-              <span className="font-medium">
-                {Object.values(review.learningBlock).filter(v => v === true).length}/3 tracks
-              </span>
-            </div>
-            <Progress
-              value={(Object.values(review.learningBlock).filter(v => v === true).length / 3) * 100}
-              className="h-2 mt-2"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Decisions Due for Follow-up - only show on today's review when there are decisions */}
-      {isViewingToday && (dueDecisions.length > 0 || earlyCheckDecisions.length > 0) && (
-        <DecisionsDueSection
-          dueDecisions={dueDecisions}
-          earlyCheckDecisions={earlyCheckDecisions}
-          onDecisionClosed={handleDecisionClosed}
-        />
-      )}
-
-      {/* Evening Reading */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-emerald-500" />
-            Evening Reading
-          </CardTitle>
-          <CardDescription>
-            Track what you read today
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="book-select">Book</Label>
-              {readingBooks.length > 0 ? (
-                <Select
-                  value={readingLog?.bookId || ""}
-                  onValueChange={(bookId) => {
-                    const book = readingBooks.find(b => b.id === bookId);
-                    if (book) {
-                      setReadingLog({
-                        bookId: book.id,
-                        bookTitle: book.title,
-                        pagesRead: readingLog?.pagesRead || 0,
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger id="book-select">
-                    <SelectValue placeholder="Select a book you're reading..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {readingBooks.map((book) => (
-                      <SelectItem key={book.id} value={book.id}>
-                        <span className="flex items-center gap-2">
-                          <BookOpen className="h-4 w-4 text-emerald-500" />
-                          {book.title}
-                          {book.author && (
-                            <span className="text-muted-foreground text-xs">
-                              by {book.author}
-                            </span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="text-sm text-muted-foreground py-3 text-center border rounded-md bg-muted/30">
-                  No books marked as "reading". Add books from the{" "}
-                  <Link href="/books" className="text-primary underline">
-                    Books page
-                  </Link>.
-                </div>
-              )}
-            </div>
-
-            {readingLog?.bookId && (
-              <div className="space-y-2">
-                <Label htmlFor="pages-read">Pages Read Today</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="pages-read"
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    value={readingLog.pagesRead || ""}
-                    onChange={(e) => {
-                      setReadingLog({
-                        ...readingLog,
-                        pagesRead: parseInt(e.target.value) || 0,
-                      });
-                    }}
-                    className="w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">pages</span>
-                </div>
-              </div>
-            )}
-
-            {readingLog?.bookId && readingLog.pagesRead > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-sm text-emerald-700 dark:text-emerald-300">
-                  Read {readingLog.pagesRead} pages of "{readingLog.bookTitle}"
-                </span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Evening Reflection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-500" />
-              Evening Reflection
-            </CardTitle>
-            <CardDescription>
-              What went well? What could be improved?
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Today I accomplished... I learned... Tomorrow I will..."
-              value={review.reflectionPm}
-              onChange={(e) => setReview({ ...review, reflectionPm: e.target.value })}
-              rows={6}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Gratitude */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Heart className="h-5 w-5 text-rose-500" />
-              Three Things I'm Grateful For
-            </CardTitle>
-            <CardDescription>
-              End the day with gratitude
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[0, 1, 2].map((index) => (
-              <div key={index} className="flex items-center gap-3">
-                <span className="text-muted-foreground font-medium w-6">{index + 1}.</span>
-                <input
-                  type="text"
-                  placeholder={`I'm grateful for...`}
-                  value={review.gratitude[index] || ""}
-                  onChange={(e) => updateGratitude(index, e.target.value)}
-                  className="flex-1 bg-transparent border-b border-muted-foreground/20 focus:border-primary outline-none py-2"
-                />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tomorrow's Priorities */}
+      {/* 3. Tomorrow's Priorities */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1048,138 +641,28 @@ export default function EveningReview() {
         </CardContent>
       </Card>
 
-      {/* Wind Down Checklist */}
+      {/* 4. Evening Reflection (full-width) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Moon className="h-5 w-5 text-indigo-500" />
-            Wind Down Checklist
+            <TrendingUp className="h-5 w-5 text-blue-500" />
+            Evening Reflection
           </CardTitle>
           <CardDescription>
-            Complete these before bed for a restful night
+            What went well? What could be improved? What are you grateful for?
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="clearInbox"
-              checked={review.windDown.clearInbox}
-              onCheckedChange={(checked) =>
-                setReview({
-                  ...review,
-                  windDown: { ...review.windDown, clearInbox: checked as boolean },
-                })
-              }
-            />
-            <div className="flex-1">
-              <Label htmlFor="clearInbox" className="font-medium cursor-pointer">
-                Clear Inbox
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Process and clear your quick capture inbox
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="rescheduleUnfinished"
-              checked={review.windDown.rescheduleUnfinished}
-              onCheckedChange={(checked) =>
-                setReview({
-                  ...review,
-                  windDown: { ...review.windDown, rescheduleUnfinished: checked as boolean },
-                })
-              }
-            />
-            <div className="flex-1">
-              <Label htmlFor="rescheduleUnfinished" className="font-medium cursor-pointer">
-                Reschedule Unfinished
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Move incomplete tasks to future dates
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="supplements"
-              checked={review.windDown.supplements}
-              onCheckedChange={(checked) =>
-                setReview({
-                  ...review,
-                  windDown: { ...review.windDown, supplements: checked as boolean },
-                })
-              }
-            />
-            <div className="flex-1">
-              <Label htmlFor="supplements" className="font-medium cursor-pointer">
-                Supplements
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Take your evening supplements stack
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="bedBy2am"
-              checked={review.windDown.bedBy2am}
-              onCheckedChange={(checked) =>
-                setReview({
-                  ...review,
-                  windDown: { ...review.windDown, bedBy2am: checked as boolean },
-                })
-              }
-            />
-            <div className="flex-1">
-              <Label htmlFor="bedBy2am" className="font-medium cursor-pointer">
-                Bed by 2am
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Hit your sleep target time
-              </p>
-            </div>
-          </div>
-
-          {/* Progress indicator */}
-          <div className="pt-2 border-t">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Wind down progress</span>
-              <span className="font-medium">
-                {Object.values(review.windDown).filter(v => v === true).length}/4
-              </span>
-            </div>
-            <Progress
-              value={(Object.values(review.windDown).filter(v => v === true).length / 4) * 100}
-              className="h-2 mt-2"
-            />
-          </div>
+        <CardContent>
+          <Textarea
+            placeholder="Today I accomplished... I learned... I'm grateful for... Tomorrow I will..."
+            value={review.reflectionPm}
+            onChange={(e) => setReview({ ...review, reflectionPm: e.target.value })}
+            rows={6}
+          />
         </CardContent>
       </Card>
 
-      {/* Incomplete Tasks Warning */}
-      {totalTasks > 0 && completedTasks < totalTasks && (
-        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <div>
-                <p className="font-medium text-amber-800 dark:text-amber-200">
-                  {totalTasks - completedTasks} task{totalTasks - completedTasks > 1 ? "s" : ""} incomplete
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                  Consider rescheduling incomplete tasks or adding them to tomorrow's priorities.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Quick Actions */}
+      {/* 5. Quick Actions */}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" asChild>
           <Link href="/dashboard">

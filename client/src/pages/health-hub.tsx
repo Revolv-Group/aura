@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { subDays, startOfMonth } from "date-fns";
-import { Heart, Activity, FlaskConical } from "lucide-react";
+import { subDays, startOfMonth, format } from "date-fns";
+import { Heart, Activity, FlaskConical, Apple } from "lucide-react";
 import HealthHubHeader from "@/components/health-hub/health-hub-header";
 import HealthCalendar from "@/components/health-hub/health-calendar";
 import QuickStats from "@/components/health-hub/quick-stats";
@@ -11,6 +11,11 @@ import DayDetailModal from "@/components/health-hub/day-detail-modal";
 import QuickLogModal from "@/components/health-hub/quick-log-modal";
 import EditHealthEntryModal from "@/components/health-hub/edit-health-entry-modal";
 import BloodworkTab from "@/components/health-hub/bloodwork-tab";
+import NutritionDashboardHeader from "@/components/nutrition-dashboard/nutrition-dashboard-header";
+import TodaysMeals from "@/components/nutrition-dashboard/todays-meals";
+import NutritionGoals from "@/components/nutrition-dashboard/nutrition-goals";
+import WeeklySummary from "@/components/nutrition-dashboard/weekly-summary";
+import MealHistory from "@/components/nutrition-dashboard/meal-history";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -31,6 +36,23 @@ interface HealthEntry {
   notes: string | null;
 }
 
+interface NutritionEntry {
+  id: string;
+  dayId: string;
+  datetime: string;
+  mealType: string;
+  description: string;
+  calories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatsG: number | null;
+  context: string | null;
+  tags: string[] | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function HealthHub() {
   const [dateRange, setDateRange] = useState("30");
   const [quickLogOpen, setQuickLogOpen] = useState(false);
@@ -38,6 +60,7 @@ export default function HealthHub() {
   const [dayDetailOpen, setDayDetailOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<HealthEntry | null>(null);
+  const [nutritionGoalsUpdateTrigger, setNutritionGoalsUpdateTrigger] = useState(0);
 
   // Calculate date range
   const getDateRange = () => {
@@ -60,6 +83,36 @@ export default function HealthHub() {
   const { data: healthEntries = [], isLoading } = useQuery<HealthEntry[]>({
     queryKey: ["/api/health"],
   });
+
+  // Fetch nutrition entries
+  const { data: nutritionEntries = [] } = useQuery<NutritionEntry[]>({
+    queryKey: ["/api/nutrition"],
+  });
+
+  const nutritionArray = Array.isArray(nutritionEntries) ? nutritionEntries : [];
+  const nutritionToday = format(new Date(), "yyyy-MM-dd");
+  const nutritionWeekAgo = format(subDays(new Date(), 6), "yyyy-MM-dd");
+
+  const nutritionTodaysMeals = nutritionArray.filter((meal) => {
+    const mealDate = format(new Date(meal.datetime), "yyyy-MM-dd");
+    return mealDate === nutritionToday;
+  });
+
+  const nutritionWeekMeals = nutritionArray.filter((meal) => {
+    const mealDate = format(new Date(meal.datetime), "yyyy-MM-dd");
+    return mealDate >= nutritionWeekAgo && mealDate <= nutritionToday;
+  });
+
+  const nutritionTodaysTotals = {
+    calories: nutritionTodaysMeals.reduce((sum, m) => sum + (m.calories || 0), 0),
+    protein: nutritionTodaysMeals.reduce((sum, m) => sum + (m.proteinG || 0), 0),
+    carbs: nutritionTodaysMeals.reduce((sum, m) => sum + (m.carbsG || 0), 0),
+    fats: nutritionTodaysMeals.reduce((sum, m) => sum + (m.fatsG || 0), 0),
+  };
+
+  const handleNutritionGoalsUpdated = () => {
+    setNutritionGoalsUpdateTrigger((prev) => prev + 1);
+  };
 
   // Ensure healthEntries is an array
   const entriesArray = Array.isArray(healthEntries) ? healthEntries : [];
@@ -129,6 +182,10 @@ export default function HealthHub() {
             <Activity className="h-4 w-4" />
             Daily Health
           </TabsTrigger>
+          <TabsTrigger value="nutrition" className="gap-2">
+            <Apple className="h-4 w-4" />
+            Nutrition
+          </TabsTrigger>
           <TabsTrigger value="bloodwork" className="gap-2">
             <FlaskConical className="h-4 w-4" />
             Bloodwork
@@ -190,6 +247,27 @@ export default function HealthHub() {
               <PerformanceInsights healthEntries={filteredEntries} />
             </>
           )}
+        </TabsContent>
+
+        {/* Nutrition Tab */}
+        <TabsContent value="nutrition" className="space-y-6">
+          <NutritionDashboardHeader
+            dateFilter="today"
+            onDateFilterChange={() => {}}
+            onGoalsUpdated={handleNutritionGoalsUpdated}
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <TodaysMeals meals={nutritionTodaysMeals} key={nutritionGoalsUpdateTrigger} />
+            </div>
+            <div>
+              <NutritionGoals totals={nutritionTodaysTotals} onGoalsUpdated={handleNutritionGoalsUpdated} key={nutritionGoalsUpdateTrigger} />
+            </div>
+          </div>
+
+          <WeeklySummary meals={nutritionWeekMeals} />
+          <MealHistory meals={nutritionEntries} />
         </TabsContent>
 
         {/* Bloodwork Tab */}

@@ -157,7 +157,7 @@ export default function CommandCenterV2() {
             title: "System Shutdown",
             description: "Review the day. Plan tomorrow. Disconnect.",
             action: "Start Review",
-            navigateTo: "/command-center"
+            navigateTo: "/evening"
         }
     };
 
