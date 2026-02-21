@@ -15,7 +15,7 @@ import { storage } from "../storage";
 
 const RITUAL_KEYWORDS = [
   "press ups", "pressups", "push ups", "pushups", "squats",
-  "supplements", "reading", "read", "pages", "morning ritual",
+  "supplements", "water", "drank", "hydration", "500ml", "morning ritual",
 ];
 const WORKOUT_KEYWORDS = [
   "workout", "trained", "gym", "ran", "cardio", "strength",
@@ -44,8 +44,9 @@ const SYSTEM_PROMPT = `You are a personal logging assistant. Parse the user's na
 Determine the intent and return ONLY valid JSON (no markdown, no explanation) in one of these shapes:
 
 1. Morning ritual update:
-{"intent":"morning_ritual","rituals":{"pressUps":{"done":true,"reps":15},"squats":{"done":true,"reps":10},"reading":{"done":true,"pages":10},"supplements":{"done":true}}}
-Only include rituals the user actually mentioned. Possible keys: pressUps, squats, reading, supplements.
+{"intent":"morning_ritual","rituals":{"pressUps":{"done":true,"reps":15},"squats":{"done":true,"reps":10},"water":{"done":true,"ml":500},"supplements":{"done":true}}}
+Only include rituals the user actually mentioned. Possible keys: pressUps, squats, water, supplements.
+IMPORTANT: "water" means hydration/drinking water. "supplements" means vitamins/pills/capsules. Do NOT confuse them — if the user says "had my water" or "drank 500ml", that is water, NOT supplements. If they say "took supplements" or "took my vitamins", that is supplements, NOT water.
 
 2. Workout log:
 {"intent":"workout","workoutType":"strength","durationMin":45,"notes":"Upper body focus"}
@@ -99,7 +100,7 @@ async function handleMorningRitual(rituals: Record<string, any>): Promise<string
   const allDone =
     merged.pressUps?.done &&
     merged.squats?.done &&
-    merged.reading?.done &&
+    merged.water?.done &&
     merged.supplements?.done;
   if (allDone && !merged.completedAt) {
     merged.completedAt = new Date().toISOString();
@@ -111,7 +112,7 @@ async function handleMorningRitual(rituals: Record<string, any>): Promise<string
   const parts: string[] = [];
   if (rituals.pressUps?.done) parts.push(`Press-ups: ${rituals.pressUps.reps ?? "done"}`);
   if (rituals.squats?.done) parts.push(`Squats: ${rituals.squats.reps ?? "done"}`);
-  if (rituals.reading?.done) parts.push(`Reading: ${rituals.reading.pages ? `${rituals.reading.pages} pages` : "done"}`);
+  if (rituals.water?.done) parts.push(`Water: ${rituals.water.ml ? `${rituals.water.ml}ml` : "done"}`);
   if (rituals.supplements?.done) parts.push("Supplements: done");
 
   let response = `Morning ritual logged:\n${parts.map((p) => `  ✅ ${p}`).join("\n")}`;

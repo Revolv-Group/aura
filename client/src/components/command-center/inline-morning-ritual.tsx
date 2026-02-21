@@ -12,7 +12,6 @@ import { Progress } from "@/components/ui/progress";
 import {
   Dumbbell,
   Pill,
-  BookOpen,
   Droplets,
   Rocket,
   Target,
@@ -41,8 +40,7 @@ const defaultHabits = [
   { key: "pressUps", label: "Press-ups", icon: Dumbbell, hasCount: true, countLabel: "reps", defaultCount: 50 },
   { key: "squats", label: "Squats", icon: Dumbbell, hasCount: true, countLabel: "reps", defaultCount: 50 },
   { key: "supplements", label: "Supplements", icon: Pill, hasCount: false },
-  { key: "reading", label: "Read 10 pages", icon: BookOpen, hasCount: true, countLabel: "pages", defaultCount: 10 },
-  { key: "water", label: "Drink 500ml Water", icon: Droplets, hasCount: false },
+  { key: "water", label: "Drink 500ml Water", icon: Droplets, hasCount: true, countLabel: "ml", defaultCount: 500 },
 ];
 
 export default function InlineMorningRitual({ day }: InlineMorningRitualProps) {
@@ -89,7 +87,7 @@ export default function InlineMorningRitual({ day }: InlineMorningRitualProps) {
             loaded[habit.key] = {
               done: saved.done || false,
               count: habit.hasCount
-                ? (saved.reps ?? saved.pages ?? saved.count ?? habit.defaultCount)
+                ? (saved.reps ?? saved.ml ?? saved.count ?? habit.defaultCount)
                 : undefined,
             };
           } else {
@@ -130,7 +128,7 @@ export default function InlineMorningRitual({ day }: InlineMorningRitualProps) {
           morningRituals[habit.key] = {
             done: ritual.done,
             ...(habit.hasCount && habit.countLabel === "reps" && { reps: ritual.count }),
-            ...(habit.hasCount && habit.countLabel === "pages" && { pages: ritual.count }),
+            ...(habit.hasCount && habit.countLabel === "ml" && { ml: ritual.count }),
           };
         }
       }

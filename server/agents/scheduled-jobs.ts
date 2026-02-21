@@ -283,7 +283,7 @@ registerJobHandler("morning_checkin", async (_agentId: string, agentSlug: string
     const habitLabels: Record<string, string> = {
       pressUps: "Press-ups",
       squats: "Squats",
-      reading: "Reading",
+      water: "Water",
       supplements: "Supplements",
     };
     for (const [key, label] of Object.entries(habitLabels)) {
@@ -291,9 +291,10 @@ registerJobHandler("morning_checkin", async (_agentId: string, agentSlug: string
       else missing.push(label);
     }
     if (done.length === 0 && missing.length === 0) {
-      message = `Your morning ritual hasn't been started yet.\n\nJust text me what you've done, e.g.:\n"Did 15 press ups, 10 squats, read 10 pages, took supplements"`;
+      message = `How's the morning going? Quick update:\n- How many press-ups did you do?\n- How many squats?\n- Have you taken your supplements?\n- Have you had your water?\n\nJust text me naturally, e.g. "Did 20 press ups, 15 squats, took supplements and had my water"`;
     } else {
-      message = `Morning ritual check-in:\n✅ Done: ${done.join(", ") || "none"}\n⬜ Remaining: ${missing.join(", ") || "all done!"}\n\nText me what you've completed.`;
+      const doneStr = done.length > 0 ? `\n\nAlready done: ${done.join(", ")} ✅` : "";
+      message = `How's the morning going?${doneStr}\n\nStill to do: ${missing.join(", ")}\n\nJust text me what you've completed.`;
     }
   }
 

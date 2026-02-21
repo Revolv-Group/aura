@@ -653,7 +653,7 @@ export const days = pgTable(
       pressUps?: { done: boolean; reps?: number };
       squats?: { done: boolean; reps?: number };
       supplements?: { done: boolean };
-      reading?: { done: boolean; pages?: number };
+      water?: { done: boolean; ml?: number };
       completedAt?: string;
     }>(),
     // Evening ritual tracking

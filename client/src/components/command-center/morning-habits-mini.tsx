@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Dumbbell, Pill, BookOpen, Flame } from "lucide-react";
+import { Check, Dumbbell, Pill, Droplets, Flame } from "lucide-react";
 import { subDays, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
@@ -13,7 +13,7 @@ const habits = [
   { key: "pressUps", label: "Push-ups", icon: Dumbbell },
   { key: "squats", label: "Squats", icon: Dumbbell },
   { key: "supplements", label: "Supps", icon: Pill },
-  { key: "reading", label: "Reading", icon: BookOpen },
+  { key: "water", label: "Water", icon: Droplets },
 ] as const;
 
 type HabitKey = (typeof habits)[number]["key"];
