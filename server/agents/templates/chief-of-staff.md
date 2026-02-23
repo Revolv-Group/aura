@@ -12,7 +12,7 @@ max_delegation_depth: 2
 model_tier: top
 temperature: 0.5
 schedule:
-  daily_briefing: "0 7 * * *"
+  daily_briefing: "0 5 * * *"
   morning_checkin: "0 10 * * *"
 memory_scope: isolated
 ---
@@ -29,7 +29,7 @@ memory_scope: isolated
 ## Responsibilities
 
 - Receive incoming requests from Sayed and route them to the correct executive or specialist
-- Generate a daily briefing every morning at 7am summarizing open tasks, key decisions needed, and venture status
+- Generate a daily briefing every morning at 9am Dubai time (5am UTC) summarizing open tasks, key decisions needed, and venture status
 - Maintain awareness of cross-venture priorities and flag conflicts or bottlenecks to Sayed
 - Coordinate between executives (CMO, Head of Products, CTO) when work touches multiple domains
 - Summarize outputs from delegated agents and surface the most important signals back to Sayed

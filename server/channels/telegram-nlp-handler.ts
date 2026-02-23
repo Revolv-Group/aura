@@ -38,6 +38,8 @@ const HEALTH_KEYWORDS = [
   "weight", "weigh", "kg", "lbs",
   "fasting", "fasted", "broke fast", "break fast", "intermittent",
   "fast started", "fast ended", "eating window",
+  "body fat", "bf%", "bodyfat", "body fat%",
+  "steps", "walked", "step count",
 ];
 
 // "morning done" shortcut patterns — exact match, no LLM call needed
@@ -103,13 +105,15 @@ If user says "morning done" or similar, mark all four as done with default reps 
 IMPORTANT: "water" means hydration/drinking water. "supplements" means vitamins/pills/capsules.
 
 2. Health/sleep log:
-{"intent":"health_log","sleepHours":7.5,"sleepQuality":"good","energyLevel":4,"mood":"high","stressLevel":"low","weightKg":82,"fasting":{"status":"started","hours":16,"window":"16:8"}}
+{"intent":"health_log","sleepHours":7.5,"sleepQuality":"good","energyLevel":4,"mood":"high","stressLevel":"low","weightKg":82,"bodyFatPercent":15,"steps":8000,"fasting":{"status":"started","hours":16,"window":"16:8"}}
 Only include fields the user actually mentioned.
 - sleepQuality: "poor", "fair", "good", "excellent"
 - energyLevel: 1-5
 - mood: "low", "medium", "high", "peak"
 - stressLevel: "low", "medium", "high"
 - weightKg: number in kg (convert from lbs if needed: lbs / 2.205)
+- bodyFatPercent: number (e.g. 15 for 15%). Parse from "15% body fat", "bf% 15", "bodyfat 15%", etc.
+- steps: integer number of steps walked (e.g. 8000). Parse from "8000 steps", "walked 10k steps", etc. Convert "10k" to 10000.
 - fasting.status: "started" (beginning fast), "ended" (broke fast), "active" (currently fasting)
 - fasting.hours: target or completed fasting hours
 - fasting.window: fasting pattern like "16:8", "18:6", "20:4"
@@ -201,6 +205,8 @@ async function handleHealthLog(data: {
   mood?: string;
   stressLevel?: string;
   weightKg?: number;
+  bodyFatPercent?: number;
+  steps?: number;
   fasting?: { status?: string; hours?: number; window?: string };
 }): Promise<string> {
   const today = getUserDate();
@@ -220,6 +226,8 @@ async function handleHealthLog(data: {
   if (data.mood) healthData.mood = data.mood;
   if (data.stressLevel) healthData.stressLevel = data.stressLevel;
   if (data.weightKg !== undefined) healthData.weightKg = data.weightKg;
+  if (data.bodyFatPercent !== undefined) healthData.bodyFatPercent = data.bodyFatPercent;
+  if (data.steps !== undefined) healthData.steps = data.steps;
 
   // Store fasting data in notes (structured)
   if (data.fasting) {
@@ -251,6 +259,8 @@ async function handleHealthLog(data: {
   if (data.mood) parts.push(`Mood: ${data.mood}`);
   if (data.stressLevel) parts.push(`Stress: ${data.stressLevel}`);
   if (data.weightKg !== undefined) parts.push(`Weight: ${data.weightKg}kg`);
+  if (data.bodyFatPercent !== undefined) parts.push(`Body Fat: ${data.bodyFatPercent}%`);
+  if (data.steps !== undefined) parts.push(`Steps: ${data.steps.toLocaleString()}`);
   if (data.fasting) {
     const fParts = [data.fasting.status, data.fasting.hours ? `${data.fasting.hours}h` : null, data.fasting.window].filter(Boolean);
     parts.push(`Fasting: ${fParts.join(" ")}`);
@@ -439,6 +449,8 @@ export async function detectAndHandleLog(
             mood: intent.mood,
             stressLevel: intent.stressLevel,
             weightKg: intent.weightKg,
+            bodyFatPercent: intent.bodyFatPercent,
+            steps: intent.steps,
             fasting: intent.fasting,
           }));
           break;

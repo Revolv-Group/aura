@@ -6,7 +6,6 @@ import {
   BookOpen,
   Settings,
   Sun,
-  Moon,
   ChevronLeft,
   ChevronRight,
   User,
@@ -90,9 +89,9 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
         label: "Dashboard",
       },
       {
-        href: "/morning",
+        href: "/today",
         icon: Sun,
-        label: "Morning Ritual",
+        label: "Today",
       },
       {
         href: "/capture",
@@ -103,11 +102,6 @@ const navigationSections: Array<{ label: string; items: NavItemConfig[]; default
         href: "/calendar",
         icon: Calendar,
         label: "Calendar",
-      },
-      {
-        href: "/evening",
-        icon: Moon,
-        label: "Evening Review",
       },
     ],
   },

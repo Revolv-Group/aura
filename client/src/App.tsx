@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,6 +25,7 @@ import SettingsCategoriesPage from "@/pages/settings-categories";
 import CalendarPage from "@/pages/calendar";
 import MorningRitual from "@/pages/morning-ritual";
 import EveningReview from "@/pages/evening-review";
+import DailyPage from "@/pages/daily";
 import WeeklyPlanning from "@/pages/weekly-planning";
 import Shopping from "@/pages/shopping";
 import Books from "@/pages/books";
@@ -76,10 +77,12 @@ function Router() {
             <Route path="/settings/integrations" component={SettingsIntegrationsPage} />
             <Route path="/settings/categories" component={SettingsCategoriesPage} />
             <Route path="/calendar" component={CalendarPage} />
-            <Route path="/morning" component={MorningRitual} />
-            <Route path="/morning/:date" component={MorningRitual} />
-            <Route path="/evening" component={EveningReview} />
-            <Route path="/evening/:date" component={EveningReview} />
+            <Route path="/today" component={DailyPage} />
+            <Route path="/today/:date" component={DailyPage} />
+            <Route path="/morning">{() => <Redirect to="/today" />}</Route>
+            <Route path="/morning/:date">{({ date }) => <Redirect to={`/today/${date}`} />}</Route>
+            <Route path="/evening">{() => <Redirect to="/today" />}</Route>
+            <Route path="/evening/:date">{({ date }) => <Redirect to={`/today/${date}`} />}</Route>
             <Route path="/weekly" component={WeeklyPlanning} />
             <Route path="/shopping" component={Shopping} />
             <Route path="/books" component={Books} />
