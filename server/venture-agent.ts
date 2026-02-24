@@ -26,6 +26,7 @@ export class VentureAgent {
   private agentConfig: AiAgentPrompt | null = null;
   private context: string = "";
   private userPreferredModel: string | null = null;
+  private isEmptyVenture: boolean = false;
 
   constructor(ventureId: string, userId: string) {
     this.ventureId = ventureId;
@@ -50,6 +51,13 @@ export class VentureAgent {
       this.venture = venture;
       this.agentConfig = agentConfig || null;
       this.userPreferredModel = userPrefs?.aiModel || null;
+
+      // Check if this is a brand new venture with no projects or tasks
+      const [projects, tasks] = await Promise.all([
+        storage.getProjects({ ventureId: this.ventureId }),
+        storage.getTasks({ ventureId: this.ventureId }),
+      ]);
+      this.isEmptyVenture = projects.length === 0 && tasks.length === 0;
 
       // Build or get cached context - this should never throw due to internal error handling
       const refreshHours = agentConfig?.contextRefreshHours || 24;
@@ -106,6 +114,48 @@ IMPORTANT INSTRUCTIONS:
 3. When creating tasks or documents, ensure they're properly linked to this venture
 4. If you're unsure about something, say so rather than guessing
 5. Be concise but thorough in your responses`;
+
+    // Inject architect preamble for empty ventures
+    if (this.isEmptyVenture) {
+      return basePrompt + `
+
+VENTURE ARCHITECT MODE:
+This is a brand new venture with no projects, phases, or tasks yet. Before doing anything else, guide the founder through planning this venture using a structured conversation.
+
+Stage 1 — Understand (ask these first):
+1. What is this venture about?${venture.oneLiner ? ' (You already know: "' + venture.oneLiner + '")' : ''}
+2. Who is the target customer or audience?
+3. What does success look like in 90 days?
+4. Is this a product, service, content play, or investment?
+5. Any existing work, assets, or constraints?
+
+Stage 2 — Define (after understanding):
+1. What are the 2-4 major workstreams or areas of focus?
+2. What needs to happen first vs. later?
+3. Who or what is responsible for each area? (Sayed, an agent, a contractor, automated)
+4. What's the budget and time commitment?
+5. Any hard deadlines or dependencies?
+
+Stage 3 — Propose:
+Present a structured plan with:
+- Projects (major workstreams)
+- Phases within each project (ordered milestones with target dates)
+- Tasks within each phase (concrete, actionable items with priorities)
+
+Format clearly so it's easy to approve or modify. Always ask: "Should I create this structure now, or do you want to adjust anything first?"
+
+Stage 4 — Execute (only after explicit approval):
+Once approved, create all projects, phases, and tasks using your tools. Then save a "Venture Plan" summary document to the Knowledge Hub.
+
+RULES:
+- Lead with questions, not assumptions
+- NEVER create projects, phases, or tasks without explicit approval
+- Be concise — no filler, no motivational fluff
+- When creating items, confirm what was created: "Created 3 projects, 7 phases, 18 tasks"
+- If Sayed says "just do it" or "go ahead" — that's approval, create everything
+
+Start by greeting Sayed and asking Stage 1 questions (skip any you already know from the venture description).`;
+    }
 
     return basePrompt;
   }

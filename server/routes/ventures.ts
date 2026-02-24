@@ -41,6 +41,20 @@ router.post("/", async (req: Request, res: Response) => {
     const validatedData = insertVentureSchema.parse(req.body);
     const venture = await storage.createVenture(validatedData);
     res.status(201).json(venture);
+
+    // Fire-and-forget: notify via Telegram about new venture
+    (async () => {
+      try {
+        const chatId = process.env.AUTHORIZED_TELEGRAM_CHAT_IDS?.split(",")[0]?.trim();
+        if (!chatId) return;
+
+        const { sendProactiveMessage } = await import("../channels/channel-manager");
+        const message = `New venture created: ${venture.name}\n\nOpen the AI Agent tab on this venture to start planning — the Venture Architect will guide you through setting up projects, phases, and tasks.`;
+        await sendProactiveMessage("telegram", chatId, message);
+      } catch (err) {
+        logger.error({ err, ventureId: venture.id }, "Failed to send venture creation notification");
+      }
+    })();
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid venture data", details: error.errors });
