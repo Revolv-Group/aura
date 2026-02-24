@@ -26,12 +26,17 @@ import { createHash, randomUUID } from "crypto";
 // ============================================================================
 
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
 
 let client: QdrantClient | null = null;
 
 function getClient(): QdrantClient {
   if (!client) {
-    client = new QdrantClient({ url: QDRANT_URL });
+    const opts: any = { url: QDRANT_URL };
+    if (QDRANT_API_KEY) {
+      opts.apiKey = QDRANT_API_KEY;
+    }
+    client = new QdrantClient(opts);
   }
   return client;
 }

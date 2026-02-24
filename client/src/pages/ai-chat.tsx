@@ -48,6 +48,7 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
+import { formatDubaiTime } from "@/lib/format-date";
 import { useDecisionModal } from "@/lib/decision-modal-store";
 import { Lightbulb } from "lucide-react";
 
@@ -555,7 +556,7 @@ export default function AiChat() {
                               : "text-muted-foreground"
                           }`}
                         >
-                          {format(new Date(msg.createdAt), "h:mm a")}
+                          {formatDubaiTime(msg.createdAt)}
                           {/* Save as Decision affordance for assistant messages */}
                           {msg.role === "assistant" && showDecisionPrompt && (
                             <>

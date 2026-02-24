@@ -501,22 +501,22 @@ export type Project = typeof projects.$inferSelect;
 
 // PHASES: Project phases and key deliverables
 export const phases = pgTable(
-  "milestones", // Keep SQL table name for backward compatibility
+  "phases",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
     status: phaseStatusEnum("status").default("not_started").notNull(),
-    order: integer("order").default(0), // For sequencing phases
+    order: integer("order").default(0),
     targetDate: date("target_date"),
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    index("idx_milestones_project_id").on(table.projectId),
-    index("idx_milestones_status").on(table.status),
-    index("idx_milestones_order").on(table.order),
+    index("idx_phases_project_id").on(table.projectId),
+    index("idx_phases_status").on(table.status),
+    index("idx_phases_order").on(table.order),
   ]
 );
 
@@ -3524,3 +3524,32 @@ export const insertResearchSubmissionSchema = createInsertSchema(researchSubmiss
 
 export type ResearchSubmission = typeof researchSubmissions.$inferSelect;
 export type InsertResearchSubmission = z.infer<typeof insertResearchSubmissionSchema>;
+
+// TELEGRAM MESSAGES: Raw message log for all Telegram interactions
+export const telegramMessages = pgTable(
+  "telegram_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chatId: text("chat_id").notNull(),
+    messageId: text("message_id"),
+    direction: text("direction").$type<"incoming" | "outgoing">().notNull(),
+    content: text("content").notNull(),
+    sender: text("sender").$type<"user" | "bot" | "system">().notNull(),
+    messageType: text("message_type").$type<"text" | "photo" | "command" | "nlp" | "agent_chat" | "proactive">(),
+    metadata: jsonb("metadata").$type<Record<string, any>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_telegram_messages_chat_id").on(table.chatId),
+    index("idx_telegram_messages_created_at").on(table.createdAt),
+    index("idx_telegram_messages_direction").on(table.direction),
+  ]
+);
+
+export const insertTelegramMessageSchema = createInsertSchema(telegramMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TelegramMessage = typeof telegramMessages.$inferSelect;
+export type InsertTelegramMessage = z.infer<typeof insertTelegramMessageSchema>;

@@ -858,6 +858,33 @@ Start by greeting Sayed and asking Stage 1 questions (skip any you already know 
       await storage.createVentureAgentAction(action);
     }
 
+    // Fire-and-forget: extract learnings from this venture conversation
+    try {
+      const { extractConversationLearnings } = await import("./agents/learning-extractor");
+      // Find the agent record for this venture (if any) to scope learnings
+      const { agents: agentsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const db = (storage as any).db;
+      const [ventureAgent] = await db
+        .select()
+        .from(agentsTable)
+        .where(eq(agentsTable.ventureId, this.ventureId))
+        .limit(1);
+
+      const agentId = ventureAgent?.id || "00000000-0000-0000-0000-000000000000";
+      extractConversationLearnings({
+        agentId,
+        agentSlug: ventureAgent?.slug || "venture-chat",
+        userMessage,
+        assistantResponse: finalResponse,
+        ventureId: this.ventureId,
+      }).catch((err: any) => {
+        logger.debug({ error: err.message }, "Venture learning extraction failed (non-critical)");
+      });
+    } catch {
+      // Non-critical — don't block chat response
+    }
+
     return {
       response: finalResponse,
       actions,

@@ -210,4 +210,20 @@ export async function sendProactiveMessage(
     text,
     parseMode: "html",
   });
+
+  // Log proactive outgoing message
+  if (platform === "telegram") {
+    try {
+      const { storage } = await import("../storage");
+      await storage.createTelegramMessage({
+        chatId,
+        direction: "outgoing",
+        content: text,
+        sender: "bot",
+        messageType: "proactive",
+      });
+    } catch (err: any) {
+      logger.debug({ error: err.message }, "Failed to log proactive message (non-critical)");
+    }
+  }
 }

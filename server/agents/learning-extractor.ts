@@ -180,6 +180,18 @@ export async function extractConversationLearnings(params: {
       logger.warn({ err: err.message }, "Background embedding generation failed")
     );
 
+    // Upsert raw conversation to Qdrant + compacted summaries to Pinecone (non-blocking)
+    upsertToVectorStores({
+      agentId,
+      agentSlug,
+      userMessage,
+      assistantResponse,
+      ventureId,
+      extractions: parsed.extractions,
+    }).catch(err =>
+      logger.debug({ err: err.message }, "Vector store upsert deferred (non-critical)")
+    );
+
     logger.info(
       { agentSlug, extractions: parsed.extractions.length },
       "Conversation learnings extracted"
@@ -412,4 +424,79 @@ function computeTextSimilarity(a: string, b: string): number {
 
   const union = wordsA.size + wordsB.size - intersection;
   return union === 0 ? 0 : intersection / union;
+}
+
+// ============================================================================
+// VECTOR STORE PIPELINE (Qdrant + Pinecone)
+// ============================================================================
+
+/**
+ * Upsert raw conversation to Qdrant and compacted extractions to Pinecone.
+ * Non-blocking — silently skips if vector stores are unavailable.
+ */
+async function upsertToVectorStores(params: {
+  agentId: string;
+  agentSlug: string;
+  userMessage: string;
+  assistantResponse: string;
+  ventureId?: string;
+  extractions: ExtractionResult[];
+}): Promise<void> {
+  const { agentId, agentSlug, userMessage, assistantResponse, ventureId, extractions } = params;
+  const sessionId = agentId; // Use agent ID as session grouping
+
+  // 1. Qdrant: upsert raw conversation
+  try {
+    const { upsertRawMemory } = await import("../memory/qdrant-store");
+    const conversationText = `User: ${userMessage.slice(0, 1000)}\nAssistant: ${assistantResponse.slice(0, 1000)}`;
+
+    await upsertRawMemory({
+      text: conversationText,
+      session_id: sessionId,
+      timestamp: Date.now(),
+      source: "conversation",
+      domain: ventureId ? "business" : "personal",
+      entities: extractions.flatMap(e => e.tags || []).slice(0, 10),
+      importance: Math.max(...extractions.map(e => e.importance), 0.5),
+    });
+
+    logger.debug({ agentSlug }, "Raw memory upserted to Qdrant");
+  } catch (err: any) {
+    // Qdrant unavailable (local Ollama not running, Qdrant not reachable) — skip silently
+    logger.debug({ error: err.message }, "Qdrant upsert skipped");
+  }
+
+  // 2. Pinecone: upsert compacted extractions (decisions + high-importance learnings)
+  try {
+    const { isPineconeConfigured, upsertToPinecone } = await import("../memory/pinecone-store");
+    if (!isPineconeConfigured()) return;
+
+    const highValue = extractions.filter(e =>
+      e.importance >= 0.6 || e.type === "decision" || e.scope === "shared"
+    );
+
+    if (highValue.length === 0) return;
+
+    const records = highValue.map(e => ({
+      id: `${agentId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text: e.content,
+      metadata: {
+        agentId,
+        agentSlug,
+        type: e.type,
+        scope: e.scope,
+        importance: e.importance,
+        tags: e.tags || [],
+        ventureId: ventureId || "",
+        timestamp: Date.now(),
+      },
+    }));
+
+    const namespace = extractions.some(e => e.type === "decision") ? "decisions" : "compacted";
+    await upsertToPinecone(namespace, records);
+
+    logger.debug({ agentSlug, count: records.length, namespace }, "Extractions upserted to Pinecone");
+  } catch (err: any) {
+    logger.debug({ error: err.message }, "Pinecone upsert skipped");
+  }
 }

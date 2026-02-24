@@ -397,6 +397,31 @@ app.use((req, res, next) => {
       log('SB-OS automations setup skipped:', String(error));
     }
 
+    // Initialize memory systems (non-blocking)
+    try {
+      // Qdrant: create collections if they don't exist
+      import('./memory/qdrant-store').then(({ initCollections }) =>
+        initCollections()
+          .then(() => log('✓ Qdrant collections initialized'))
+          .catch((err: any) => log('⚠ Qdrant init deferred:', err.message))
+      );
+
+      // Pinecone: validate connection
+      import('./memory/pinecone-store').then(({ getPineconeStatus }) =>
+        getPineconeStatus()
+          .then((status) => {
+            if (status.available) {
+              log(`✓ Pinecone connected (${status.indexName}, ${status.stats?.totalRecordCount || 0} records)`);
+            } else {
+              log(`⚠ Pinecone unavailable: ${status.error}`);
+            }
+          })
+          .catch((err: any) => log('⚠ Pinecone check deferred:', err.message))
+      );
+    } catch (error) {
+      log('Memory systems init skipped:', String(error));
+    }
+
     // Graceful shutdown
     const gracefulShutdown = async () => {
       log('Shutting down gracefully...');

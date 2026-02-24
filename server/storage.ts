@@ -154,6 +154,9 @@ import {
   type InsertResearchSubmission,
   externalAgents,
   researchSubmissions,
+  type TelegramMessage,
+  type InsertTelegramMessage,
+  telegramMessages,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq, desc, and, or, gte, lte, not, inArray, like, sql, asc, isNull } from "drizzle-orm";
@@ -2470,10 +2473,40 @@ export class DBStorage implements IStorage {
     }
   }
 
-  // Stub for telegram-bot.ts (Phase 2 - will implement proper messaging table)
+  // Telegram message persistence
+  async createTelegramMessage(data: InsertTelegramMessage): Promise<TelegramMessage> {
+    const results = await this.db.insert(telegramMessages).values(data as any).returning();
+    return results[0];
+  }
+
+  async getTelegramMessages(chatId: string, opts?: { limit?: number; direction?: "incoming" | "outgoing" }): Promise<TelegramMessage[]> {
+    let query = this.db.select().from(telegramMessages).where(eq(telegramMessages.chatId, chatId));
+    if (opts?.direction) {
+      query = this.db.select().from(telegramMessages).where(
+        and(eq(telegramMessages.chatId, chatId), eq(telegramMessages.direction, opts.direction))
+      );
+    }
+    const results = await query.orderBy(desc(telegramMessages.createdAt)).limit(opts?.limit || 50);
+    return results;
+  }
+
+  // Backward-compatible wrapper for telegram-adapter saveMessageHistory
   async createMessage(data: any): Promise<any> {
-    console.log('[Phase 2] createMessage stub called:', data.platform, data.sender);
-    return { id: 'stub', ...data };
+    try {
+      const msg = await this.createTelegramMessage({
+        chatId: data.phoneNumber || data.chatId || "unknown",
+        direction: data.sender === "user" ? "incoming" : "outgoing",
+        content: data.messageContent || data.content || "",
+        sender: data.sender === "assistant" ? "bot" : data.sender || "user",
+        messageType: data.messageType || "text",
+        metadata: { platform: data.platform, processed: data.processed },
+      });
+      return msg;
+    } catch (error: any) {
+      // Non-critical — log and return stub
+      console.warn("[createMessage] Failed to persist:", error.message);
+      return { id: "error", ...data };
+    }
   }
 
   // ============================================================================

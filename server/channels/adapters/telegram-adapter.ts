@@ -171,6 +171,7 @@ class TelegramAdapter implements ChannelAdapter {
         await ctx.reply("Generating briefing...");
         const response = await this.routeToAgent(ctx, "chief-of-staff", "Generate my daily briefing for today.");
         await this.sendLongMessage(ctx.chat.id.toString(), response);
+        this.saveMessageHistory(ctx.chat.id.toString(), "/briefing", response, "command").catch(() => {});
       } catch (error: any) {
         await ctx.reply("Failed to generate briefing.");
         this.recordError(error.message);
@@ -193,7 +194,9 @@ class TelegramAdapter implements ChannelAdapter {
           notes: null,
           ventureId: null,
         } as any);
-        await ctx.reply(`Captured: "${capture.title}"`);
+        const reply = `Captured: "${capture.title}"`;
+        await ctx.reply(reply);
+        this.saveMessageHistory(ctx.chat.id.toString(), `/capture ${text}`, reply, "command").catch(() => {});
       } catch (error: any) {
         await ctx.reply("Failed to capture.");
         this.recordError(error.message);
@@ -239,7 +242,9 @@ class TelegramAdapter implements ChannelAdapter {
 
         lines.push(`\n📥 Inbox: ${captures.length} items`);
 
-        await ctx.reply(lines.join("\n"));
+        const reply = lines.join("\n");
+        await ctx.reply(reply);
+        this.saveMessageHistory(ctx.chat.id.toString(), "/today", reply, "command").catch(() => {});
       } catch (error: any) {
         await ctx.reply("Failed to load today's summary.");
         this.recordError(error.message);
@@ -275,7 +280,9 @@ class TelegramAdapter implements ChannelAdapter {
         });
         lines.push("\nUse /done <number> to mark as done.");
 
-        await ctx.reply(lines.join("\n"));
+        const reply = lines.join("\n");
+        await ctx.reply(reply);
+        this.saveMessageHistory(ctx.chat.id.toString(), "/tasks", reply, "command").catch(() => {});
       } catch (error: any) {
         await ctx.reply("Failed to load tasks.");
         this.recordError(error.message);
@@ -376,7 +383,9 @@ class TelegramAdapter implements ChannelAdapter {
           await ctx.reply(`Task not found.`);
           return;
         }
-        await ctx.reply(`✅ Done: "${task.title}"`);
+        const reply = `✅ Done: "${task.title}"`;
+        await ctx.reply(reply);
+        this.saveMessageHistory(ctx.chat.id.toString(), `/done ${numStr}`, reply, "command").catch(() => {});
       } catch (error: any) {
         await ctx.reply("Failed to mark task as done.");
         this.recordError(error.message);
@@ -393,6 +402,8 @@ class TelegramAdapter implements ChannelAdapter {
         const { detectAndHandleLog } = await import("../telegram-nlp-handler.js");
         const nlpResult = await detectAndHandleLog(ctx.message.text);
         if (nlpResult.handled) {
+          // Save raw NLP messages to telegram_messages table
+          await this.saveMessageHistory(ctx.chat.id.toString(), ctx.message.text, nlpResult.response!, "nlp");
           await this.sendLongMessage(ctx.chat.id.toString(), nlpResult.response!);
           this.stats.messagesSent++;
           return;
@@ -419,7 +430,7 @@ class TelegramAdapter implements ChannelAdapter {
         const response = await processIncomingMessage(message);
 
         // Save to message store for history
-        await this.saveMessageHistory(ctx.chat.id.toString(), ctx.message.text, response);
+        await this.saveMessageHistory(ctx.chat.id.toString(), ctx.message.text, response, "agent_chat");
 
         // Send response (handle long messages)
         await this.sendLongMessage(ctx.chat.id.toString(), response);
@@ -668,26 +679,24 @@ class TelegramAdapter implements ChannelAdapter {
   private async saveMessageHistory(
     chatId: string,
     userText: string,
-    aiResponse: string
+    aiResponse: string,
+    messageType: "text" | "nlp" | "command" | "agent_chat" = "text"
   ): Promise<void> {
     try {
-      await storage.createMessage({
-        phoneNumber: chatId,
-        messageContent: userText,
+      await storage.createTelegramMessage({
+        chatId,
+        direction: "incoming",
+        content: userText,
         sender: "user",
-        messageType: "text",
-        platform: "telegram",
-        processed: true,
+        messageType,
       });
 
-      await storage.createMessage({
-        phoneNumber: chatId,
-        messageContent: aiResponse,
-        sender: "assistant",
-        messageType: "text",
-        platform: "telegram",
-        processed: true,
-        aiResponse: aiResponse,
+      await storage.createTelegramMessage({
+        chatId,
+        direction: "outgoing",
+        content: aiResponse,
+        sender: "bot",
+        messageType,
       });
     } catch (error: any) {
       // Non-critical — don't fail the response
