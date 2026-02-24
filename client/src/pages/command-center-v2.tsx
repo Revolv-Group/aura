@@ -10,11 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Circle, Clock, Inbox, ChevronRight, Flame, AlertTriangle, CheckCircle2, Target, Calendar, CalendarDays, Video, MapPin, Moon, Sun } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import QuickLogModal from "@/components/health-hub/quick-log-modal";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 export default function CommandCenterV2() {
     const [, navigate] = useLocation();
     const [time, setTime] = useState(new Date());
     const [showHealthLog, setShowHealthLog] = useState(false);
+
+    // Real-time updates via WebSocket
+    const { connected: wsConnected } = useWebSocket();
 
     // Fetch readiness data
     const { data: readiness, isLoading: isLoadingReadiness, error: readinessError } = useQuery({
@@ -242,6 +246,15 @@ export default function CommandCenterV2() {
                         <span>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         <span className="mx-2">•</span>
                         <span className="uppercase font-semibold text-xs tracking-wider">{mode.replace("_", " ")} MODE</span>
+                        {wsConnected && (
+                            <>
+                                <span className="mx-2">•</span>
+                                <span className="text-green-500 text-xs flex items-center gap-1">
+                                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                                    LIVE
+                                </span>
+                            </>
+                        )}
                         {!isLoadingUrgent && urgent.totalUrgent > 0 && !urgent.onFire && (
                             <>
                                 <span className="mx-2">•</span>

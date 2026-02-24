@@ -3535,7 +3535,7 @@ export const telegramMessages = pgTable(
     direction: text("direction").$type<"incoming" | "outgoing">().notNull(),
     content: text("content").notNull(),
     sender: text("sender").$type<"user" | "bot" | "system">().notNull(),
-    messageType: text("message_type").$type<"text" | "photo" | "command" | "nlp" | "agent_chat" | "proactive">(),
+    messageType: text("message_type").$type<"text" | "photo" | "voice" | "command" | "nlp" | "agent_chat" | "proactive">(),
     metadata: jsonb("metadata").$type<Record<string, any>>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

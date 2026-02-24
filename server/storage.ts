@@ -157,6 +157,9 @@ import {
   type TelegramMessage,
   type InsertTelegramMessage,
   telegramMessages,
+  type EntityRelation,
+  type InsertEntityRelation,
+  entityRelations,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq, desc, and, or, gte, lte, not, inArray, like, sql, asc, isNull } from "drizzle-orm";
@@ -2507,6 +2510,68 @@ export class DBStorage implements IStorage {
       console.warn("[createMessage] Failed to persist:", error.message);
       return { id: "error", ...data };
     }
+  }
+
+  // ============================================================================
+  // ENTITY RELATIONS (Relationship Graph)
+  // ============================================================================
+
+  async upsertEntityRelation(data: {
+    sourceName: string;
+    targetName: string;
+    relationType: string;
+    context?: string;
+    sourceType?: string;
+    targetType?: string;
+  }): Promise<EntityRelation> {
+    // Check for existing relation
+    const existing = await this.db.select().from(entityRelations).where(
+      and(
+        eq(entityRelations.sourceName, data.sourceName),
+        eq(entityRelations.targetName, data.targetName),
+        eq(entityRelations.relationType, data.relationType as any)
+      )
+    ).limit(1);
+
+    if (existing.length > 0) {
+      // Update existing: increment mention count, update last seen
+      const updated = await this.db.update(entityRelations)
+        .set({
+          mentionCount: sql`${entityRelations.mentionCount} + 1`,
+          lastSeen: new Date(),
+          context: data.context || existing[0].context,
+        })
+        .where(eq(entityRelations.id, existing[0].id))
+        .returning();
+      return updated[0];
+    }
+
+    // Create new relation
+    const results = await this.db.insert(entityRelations).values({
+      sourceName: data.sourceName,
+      targetName: data.targetName,
+      sourceType: data.sourceType,
+      targetType: data.targetType,
+      relationType: data.relationType as any,
+      context: data.context,
+    } as any).returning();
+    return results[0];
+  }
+
+  async getEntityRelations(entityName: string): Promise<EntityRelation[]> {
+    const results = await this.db.select().from(entityRelations).where(
+      or(
+        eq(entityRelations.sourceName, entityName),
+        eq(entityRelations.targetName, entityName)
+      )
+    ).orderBy(desc(entityRelations.lastSeen));
+    return results;
+  }
+
+  async getAllEntityRelations(limit: number = 100): Promise<EntityRelation[]> {
+    return this.db.select().from(entityRelations)
+      .orderBy(desc(entityRelations.mentionCount))
+      .limit(limit);
   }
 
   // ============================================================================

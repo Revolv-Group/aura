@@ -1163,8 +1163,8 @@ export async function executeAgentChat(
   }).catch(err => logger.debug({ err: err.message }, "Learning extraction failed (non-critical)"));
 
   // Fire-and-forget: extract entity relationships
-  import("../memory/entity-linker").then(({ extractEntityRelations }) =>
-    extractEntityRelations({ userMessage, assistantResponse: finalResponse })
+  import("../memory/entity-extractor").then(({ extractEntities }) =>
+    extractEntities(userMessage, finalResponse, agent.ventureId ? "business" : "personal")
       .catch(err => logger.debug({ err: err.message }, "Entity extraction failed (non-critical)"))
   ).catch(() => {});
 

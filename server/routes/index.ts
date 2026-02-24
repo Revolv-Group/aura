@@ -44,6 +44,7 @@ import ragRoutes from "./rag";
 import webClipRoutes from "./web-clip";
 import knowledgeFilesRoutes from "./knowledge-files";
 import memoryRoutes from "./memory";
+import voiceRoutes from "./voice";
 import agentRoutes from "./agents";
 import sessionRoutes from "./sessions";
 import externalRoutes from "./external";
@@ -152,6 +153,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/memory', memoryRoutes);
 
   // ============================================================================
+  // VOICE (Jarvis-style interaction: STT, TTS, voice chat)
+  // ============================================================================
+  app.use('/api/voice', voiceRoutes);
+
+  // ============================================================================
   // SETTINGS & USER PREFERENCES
   // ============================================================================
   app.use('/api/settings', settingsRoutes);
@@ -229,6 +235,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // FILE UPLOADS
   // ============================================================================
   app.use('/api', uploadRoutes);
+
+  // ============================================================================
+  // ENTITY RELATIONSHIP GRAPH
+  // ============================================================================
+  app.get('/api/entities/relations', requireAuth, async (req: any, res: any) => {
+    try {
+      const limit = parseInt(String(req.query.limit || '100'), 10);
+      const relations = await storage.getAllEntityRelations(limit);
+      res.json(relations);
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to fetch entity relations' });
+    }
+  });
+
+  app.get('/api/entities/relations/:name', requireAuth, async (req: any, res: any) => {
+    try {
+      const name = String(req.params.name);
+      const relations = await storage.getEntityRelations(name);
+      res.json(relations);
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to fetch entity relations' });
+    }
+  });
+
+  app.get('/api/ws/status', requireAuth, async (_req: any, res: any) => {
+    try {
+      const { getWSStats } = await import('../ws/event-bus');
+      res.json(getWSStats());
+    } catch {
+      res.json({ connected: 0, channels: [] });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

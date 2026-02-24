@@ -443,15 +443,104 @@ class TelegramAdapter implements ChannelAdapter {
       }
     });
 
-    // ---- Photo Messages ----
+    // ---- Voice Messages (Jarvis-style) ----
+    this.bot.on("voice", async (ctx) => {
+      try {
+        this.stats.messagesReceived++;
+        this.stats.lastActivity = new Date();
+
+        const chatId = ctx.chat.id.toString();
+        await ctx.reply("🎙️ Transcribing...");
+
+        // Get voice file URL
+        const voice = ctx.message.voice;
+        const fileLink = await ctx.telegram.getFileLink(voice.file_id);
+        const audioUrl = fileLink.href;
+
+        // Transcribe with Whisper
+        const { transcribeAudio } = await import("../../voice/voice-service");
+        const transcription = await transcribeAudio(audioUrl);
+
+        if (!transcription.text || transcription.text.trim().length === 0) {
+          await ctx.reply("Couldn't understand the voice message. Please try again.");
+          return;
+        }
+
+        const userText = transcription.text.trim();
+
+        // Show what was heard
+        await ctx.reply(`📝 "${userText}"`);
+
+        // NLP intercept first (rituals, health, workouts)
+        const { detectAndHandleLog } = await import("../telegram-nlp-handler.js");
+        const nlpResult = await detectAndHandleLog(userText);
+
+        let response: string;
+        if (nlpResult.handled) {
+          response = nlpResult.response!;
+        } else {
+          // Route to agent system
+          const message: IncomingMessage = {
+            channelMessageId: ctx.message.message_id.toString(),
+            platform: "telegram",
+            senderId: ctx.from.id.toString(),
+            senderName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" "),
+            chatId,
+            text: userText,
+            messageType: "voice",
+            timestamp: new Date(ctx.message.date * 1000),
+            metadata: {
+              voice: true,
+              duration: voice.duration,
+              transcription: userText,
+            },
+          };
+          response = await processIncomingMessage(message);
+        }
+
+        // Try to send voice response back (TTS)
+        try {
+          const { textToSpeech, isVoiceAvailable } = await import("../../voice/voice-service");
+          if (isVoiceAvailable() && response.length < 4000) {
+            const tts = await textToSpeech(response);
+            await ctx.replyWithVoice({
+              source: tts.audioBuffer,
+              filename: "response.opus",
+            });
+          }
+        } catch (ttsError: any) {
+          logger.debug({ error: ttsError.message }, "TTS failed, falling back to text");
+        }
+
+        // Always send text version too (for readability)
+        await this.sendLongMessage(chatId, response);
+
+        // Save history
+        await this.saveMessageHistory(chatId, `[Voice] ${userText}`, response, "voice");
+
+        // Broadcast to WebSocket for live dashboard
+        import("../../ws/event-bus").then(({ broadcastTelegramMessage }) =>
+          broadcastTelegramMessage(chatId, "voice")
+        ).catch(() => {});
+
+        this.stats.messagesSent++;
+      } catch (error: any) {
+        logger.error({ error: error.message }, "Error processing Telegram voice message");
+        await ctx.reply("Sorry, I couldn't process your voice message. Please try again or type your message.");
+        this.recordError(error.message);
+      }
+    });
+
+    // ---- Photo Messages (Vision Processing) ----
     this.bot.on("photo", async (ctx) => {
       try {
         this.stats.messagesReceived++;
         this.stats.lastActivity = new Date();
 
-        const caption = ctx.message.caption || "Photo received (no caption)";
+        const chatId = ctx.chat.id.toString();
+        const caption = ctx.message.caption || "";
         const photos = ctx.message.photo;
-        const photo = photos[photos.length - 1];
+        const photo = photos[photos.length - 1]; // Highest resolution
 
         let mediaUrl: string | undefined;
         try {
@@ -461,20 +550,54 @@ class TelegramAdapter implements ChannelAdapter {
           // File link may fail for large photos
         }
 
-        const message: IncomingMessage = {
-          channelMessageId: ctx.message.message_id.toString(),
-          platform: "telegram",
-          senderId: ctx.from.id.toString(),
-          senderName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" "),
-          chatId: ctx.chat.id.toString(),
-          text: `[Photo] ${caption}`,
-          messageType: "photo",
-          timestamp: new Date(ctx.message.date * 1000),
-          mediaUrl,
-        };
+        if (!mediaUrl) {
+          await ctx.reply("Couldn't download the photo. Please try again.");
+          return;
+        }
 
-        const response = await processIncomingMessage(message);
-        await this.sendLongMessage(ctx.chat.id.toString(), response);
+        await ctx.reply("👁️ Analyzing image...");
+
+        // Use vision model to analyze the image
+        const { analyzeImage } = await import("../../voice/image-service");
+        const analysis = await analyzeImage(mediaUrl, caption);
+
+        let response: string;
+
+        // Check if this is a loggable intent (meal photo, receipt, etc.)
+        if (analysis.intent === "meal" && analysis.structured) {
+          // Try to log nutrition via NLP handler
+          const mealText = `${analysis.structured.description}, ${analysis.structured.calories || ""} calories, ${analysis.structured.protein || ""}g protein`;
+          const { detectAndHandleLog } = await import("../telegram-nlp-handler.js");
+          const nlpResult = await detectAndHandleLog(mealText);
+          if (nlpResult.handled) {
+            response = `📸 ${analysis.description}\n\n${nlpResult.response}`;
+          } else {
+            response = `📸 ${analysis.description}`;
+          }
+        } else {
+          // Route to agent with image context
+          const imageContext = caption
+            ? `[Photo: ${analysis.description}] ${caption}`
+            : `[Photo: ${analysis.description}] What should I do with this?`;
+
+          const message: IncomingMessage = {
+            channelMessageId: ctx.message.message_id.toString(),
+            platform: "telegram",
+            senderId: ctx.from.id.toString(),
+            senderName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" "),
+            chatId,
+            text: imageContext,
+            messageType: "photo",
+            timestamp: new Date(ctx.message.date * 1000),
+            mediaUrl,
+            metadata: { imageAnalysis: analysis },
+          };
+
+          response = await processIncomingMessage(message);
+        }
+
+        await this.sendLongMessage(chatId, response);
+        await this.saveMessageHistory(chatId, `[Photo] ${caption || analysis.description}`, response, "photo");
 
         this.stats.messagesSent++;
       } catch (error: any) {
@@ -680,7 +803,7 @@ class TelegramAdapter implements ChannelAdapter {
     chatId: string,
     userText: string,
     aiResponse: string,
-    messageType: "text" | "nlp" | "command" | "agent_chat" = "text"
+    messageType: "text" | "nlp" | "command" | "agent_chat" | "voice" | "photo" = "text"
   ): Promise<void> {
     try {
       await storage.createTelegramMessage({

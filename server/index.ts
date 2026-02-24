@@ -256,6 +256,15 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
+  // Initialize WebSocket event bus for real-time dashboard updates
+  try {
+    const { initWebSocket } = await import('./ws/event-bus');
+    initWebSocket(server);
+    log('✓ WebSocket event bus initialized on /ws');
+  } catch (wsError) {
+    log('WebSocket setup skipped:', String(wsError));
+  }
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -392,7 +401,16 @@ app.use((req, res, next) => {
         log('Channel adapters setup skipped:', String(channelError));
       }
 
-      log('✓ SB-OS automations initialized (day creation, reminders, RAG embeddings, agent scheduler)');
+      // Initialize nudge engine (event-driven proactive notifications)
+      try {
+        const { scheduleNudgeEngine } = await import('./automations/nudge-engine');
+        scheduleNudgeEngine();
+        log('✓ Nudge engine initialized');
+      } catch (nudgeError) {
+        log('Nudge engine setup skipped:', String(nudgeError));
+      }
+
+      log('✓ SB-OS automations initialized (day creation, reminders, RAG embeddings, agent scheduler, nudges)');
     } catch (error) {
       log('SB-OS automations setup skipped:', String(error));
     }
