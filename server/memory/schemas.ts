@@ -156,8 +156,8 @@ export const QDRANT_COLLECTIONS = {
   ENTITY_INDEX: "entity_index",
 } as const;
 
-export const LOCAL_EMBEDDING_DIMS = 1024;
-export const PINECONE_EMBEDDING_DIMS = 512; // Matryoshka truncation from 1024
+export const LOCAL_EMBEDDING_DIMS = 1536; // OpenRouter text-embedding-3-small
+export const PINECONE_EMBEDDING_DIMS = 512; // Truncation from 1536 to save storage
 
 export const PINECONE_NAMESPACES = {
   COMPACTED: "compacted",

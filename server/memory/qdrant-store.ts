@@ -1,17 +1,17 @@
 /**
- * Qdrant Store - Local Vector Database
+ * Qdrant Store - Cloud Vector Database
  *
  * Manages three collections:
  * - raw_memories: verbatim conversation messages
  * - compacted_memories: compaction summaries
  * - entity_index: people, orgs, projects, concepts
  *
- * Uses nomic-embed-text-v1.5 (1024 dims) via Ollama for local embeddings.
+ * Uses OpenRouter text-embedding-3-small (1536 dims) for embeddings.
  */
 
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { logger } from "../logger";
-import { generateLocalEmbedding } from "./local-embedder";
+import { generateEmbedding, generateEmbeddings } from "../embeddings";
 import {
   QDRANT_COLLECTIONS,
   LOCAL_EMBEDDING_DIMS,
@@ -147,7 +147,7 @@ export async function upsertRawMemory(
   const id = payload.id || randomUUID();
   const checksum = computeChecksum(payload.text);
 
-  const embedding = await generateLocalEmbedding(payload.text, "document");
+  const embedding = await generateEmbedding(payload.text);
 
   const fullPayload: RawMemoryPayload = {
     ...payload,
@@ -181,10 +181,9 @@ export async function upsertRawMemories(
   if (memories.length === 0) return [];
 
   const qdrant = getClient();
-  const { generateLocalEmbeddings } = await import("./local-embedder");
 
   const texts = memories.map((m) => m.text);
-  const embeddings = await generateLocalEmbeddings(texts, "document");
+  const embeddings = await generateEmbeddings(texts);
 
   const ids: string[] = [];
   const points = memories.map((mem, i) => {
@@ -283,7 +282,7 @@ export async function upsertCompactedMemory(
   const qdrant = getClient();
   const pointId = id || randomUUID();
 
-  const embedding = await generateLocalEmbedding(payload.summary, "document");
+  const embedding = await generateEmbedding(payload.summary);
 
   await qdrant.upsert(QDRANT_COLLECTIONS.COMPACTED_MEMORIES, {
     wait: true,
@@ -351,7 +350,7 @@ export async function upsertEntity(
   const pointId = id || randomUUID();
 
   const embeddingText = `${payload.name}: ${payload.description}`;
-  const embedding = await generateLocalEmbedding(embeddingText, "document");
+  const embedding = await generateEmbedding(embeddingText);
 
   await qdrant.upsert(QDRANT_COLLECTIONS.ENTITY_INDEX, {
     wait: true,
@@ -466,7 +465,7 @@ export async function searchCollection(
   const qdrant = getClient();
   const { limit = 10, min_score = 0.25, filter } = options;
 
-  const embedding = await generateLocalEmbedding(query, "query");
+  const embedding = await generateEmbedding(query);
 
   const results = await qdrant.search(collection, {
     vector: embedding.embedding,

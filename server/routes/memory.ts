@@ -28,14 +28,14 @@ const router = Router();
 router.get("/status", async (req: Request, res: Response) => {
   try {
     const { getQdrantStatus } = await import("../memory/qdrant-store");
-    const { isOllamaAvailable } = await import("../memory/local-embedder");
     const { getPineconeStatus } = await import("../memory/pinecone-store");
     const { getSyncEngineStatus } = await import("../sync/sync-engine");
     const { getQueueStatus } = await import("../agents/task-queue");
 
-    const [qdrant, ollama, pinecone, sync, queue] = await Promise.all([
+    const embeddingsAvailable = !!process.env.OPENROUTER_API_KEY;
+
+    const [qdrant, pinecone, sync, queue] = await Promise.all([
       getQdrantStatus(),
-      isOllamaAvailable(),
       getPineconeStatus().catch(() => ({
         available: false,
         indexName: "sbos-memory",
@@ -58,12 +58,11 @@ router.get("/status", async (req: Request, res: Response) => {
 
     res.json({
       qdrant,
-      ollama,
+      embeddings: { available: embeddingsAvailable, provider: "openrouter", model: "text-embedding-3-small" },
       pinecone,
       sync,
       taskQueue: queue,
-      ready:
-        qdrant.available && ollama.available && ollama.modelLoaded,
+      ready: qdrant.available && embeddingsAvailable,
     });
   } catch (error) {
     logger.error({ error }, "Failed to get memory status");

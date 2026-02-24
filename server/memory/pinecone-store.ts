@@ -2,7 +2,7 @@
  * Pinecone Store - Cloud Vector Database
  *
  * Cloud mirror for compacted memories, entities, and decisions.
- * Uses 512-dim vectors (Matryoshka truncation from 1024) to halve storage costs.
+ * Uses 512-dim vectors (truncated from 1536 OpenRouter embeddings) to save storage.
  *
  * Namespaces:
  * - compacted: High-signal compacted summaries
@@ -12,7 +12,8 @@
 
 import { Pinecone } from "@pinecone-database/pinecone";
 import { logger } from "../logger";
-import { generateLocalEmbedding, truncateEmbedding } from "./local-embedder";
+import { generateEmbedding, generateEmbeddings } from "../embeddings";
+import { truncateEmbedding } from "./local-embedder";
 import { PINECONE_NAMESPACES, PINECONE_EMBEDDING_DIMS } from "./schemas";
 
 // ============================================================================
@@ -63,9 +64,8 @@ export async function upsertToPinecone(
   const index = getIndex().namespace(namespace);
 
   // Generate and truncate embeddings
-  const { generateLocalEmbeddings } = await import("./local-embedder");
   const texts = records.map((r) => r.text);
-  const embeddings = await generateLocalEmbeddings(texts, "document");
+  const embeddings = await generateEmbeddings(texts);
 
   const vectors = records.map((record, i) => ({
     id: record.id,
@@ -142,7 +142,7 @@ export async function searchPinecone(
   const index = getIndex().namespace(namespace);
 
   // Generate and truncate query embedding
-  const embedding = await generateLocalEmbedding(query, "query");
+  const embedding = await generateEmbedding(query);
   const truncated = truncateEmbedding(embedding.embedding, PINECONE_EMBEDDING_DIMS);
 
   const queryOptions: Record<string, unknown> = {
