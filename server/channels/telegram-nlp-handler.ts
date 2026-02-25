@@ -115,7 +115,7 @@ Possible intent shapes:
 {"intent":"morning_ritual","rituals":{"pressUps":{"done":true,"reps":15},"squats":{"done":true,"reps":10},"water":{"done":true},"supplements":{"done":true}}}
 Only include rituals the user actually mentioned. Possible keys: pressUps, squats, water, supplements.
 If user says "morning done" or similar, mark all four as done with default reps of 50.
-IMPORTANT: "water" means hydration/drinking water. "supplements" means vitamins/pills/capsules.
+IMPORTANT: water and supplements are ALWAYS done by default — only set them to false if the user explicitly says they skipped them (e.g. "no supplements today"). You do NOT need the user to mention them — they are auto-completed daily habits.
 
 2. Health/sleep log:
 {"intent":"health_log","sleepHours":7.5,"sleepQuality":"good","energyLevel":4,"mood":"high","stressLevel":"low","weightKg":82,"bodyFatPercent":15,"steps":8000,"fasting":{"status":"started","hours":16,"window":"16:8"}}
@@ -194,8 +194,13 @@ async function handleMorningRitual(rituals: Record<string, any>): Promise<string
   const day = await storage.getDayOrCreate(today);
 
   // Merge with existing rituals (don't overwrite)
+  // Supplements + water are always done unless explicitly skipped
   const existing = (day.morningRituals as Record<string, any>) ?? {};
-  const merged = { ...existing, ...rituals };
+  const defaults = {
+    supplements: { done: true },
+    water: { done: true },
+  };
+  const merged = { ...defaults, ...existing, ...rituals };
 
   // Check if all four are done
   const allDone =
