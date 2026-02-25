@@ -45,6 +45,7 @@ import { generateProject, generateCode, listGeneratedProjects } from "./tools/co
 import { deploy, getDeploymentHistory, getDeploymentStatus } from "./tools/deployer";
 import { hybridSearch } from "../vector-search";
 import { buildLifeContext } from "./tools/life-context";
+import { getConversationHistory } from "./conversation-manager";
 
 // Lazy DB
 let db: any = null;
@@ -1020,13 +1021,13 @@ export async function executeAgentChat(
     throw new Error(`Agent "${agentSlug}" is inactive`);
   }
 
-  // Get conversation history (last 10 messages)
-  const history = await database
-    .select()
-    .from(agentConversations)
-    .where(eq(agentConversations.agentId, agent.id))
-    .orderBy(desc(agentConversations.createdAt))
-    .limit(10);
+  // Get conversation history with smart token-budget windowing
+  // (replaces raw .limit(10) — uses getConversationHistory which respects token budget)
+  const history = await getConversationHistory(agent.id, {
+    limit: 20,
+    maxTokens: 8000,
+    includeDelegation: true,
+  });
 
   // Get agent memory — split between static context and relevant context
   const memoryBudget = agent.maxContextTokens || 2000;
@@ -1049,7 +1050,7 @@ export async function executeAgentChat(
   // Build message array
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    ...history.reverse().map((msg: AgentConversation) => ({
+    ...history.map((msg: AgentConversation) => ({
       role: msg.role === "delegation" ? "system" as const : msg.role as "user" | "assistant" | "system",
       content: msg.content,
     })),

@@ -85,6 +85,9 @@ export async function retrieveMemories(
     include_compacted = true,
     include_entities = true,
     domains,
+    minImportance,
+    maxAgeDays,
+    entityTypes,
   } = options;
 
   const collections: string[] = [];
@@ -93,12 +96,15 @@ export async function retrieveMemories(
   if (include_entities) collections.push(QDRANT_COLLECTIONS.ENTITY_INDEX);
 
   try {
-    // Step 1: Search local Qdrant
+    // Step 1: Search local Qdrant with metadata pre-filters
     const localResults = await searchAllCollections(query, {
       limit: limit * 2, // Fetch extra for re-ranking
       min_score: min_score * 0.7, // Lower threshold, we'll re-score
       collections,
       domainFilter: domains?.[0], // Simple filter for now
+      minImportance, // Pre-filter: skip low-importance noise
+      maxAgeDays, // Pre-filter: skip old irrelevant memories
+      entityTypes, // Pre-filter: restrict entity types
     });
 
     // Step 2: Re-score with full formula

@@ -172,6 +172,8 @@ export async function searchMemories(
     .orderBy(desc(agentMemory.importance));
 
   // Try semantic search if embeddings available
+  // Scoring formula aligned with hybrid-retriever.ts:
+  //   final = 0.70 * cosine + 0.15 * recency_decay(30d) + 0.15 * importance
   try {
     const { generateEmbedding, cosineSimilarity, parseEmbedding } = await import("../embeddings");
     const queryEmbedding = await generateEmbedding(query);
@@ -179,12 +181,17 @@ export async function searchMemories(
     const memoriesWithEmbeddings = all.filter((m: any) => m.embedding);
 
     if (memoriesWithEmbeddings.length > 0) {
+      const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+      const now = Date.now();
+
       const scored = memoriesWithEmbeddings.map((m: any) => {
         const memEmbedding = parseEmbedding(m.embedding);
         if (!memEmbedding) return { memory: m, score: 0 };
 
         const similarity = cosineSimilarity(queryEmbedding.embedding, memEmbedding);
-        const score = similarity * 0.7 + (m.importance || 0) * 0.3;
+        const ageMs = now - new Date(m.createdAt).getTime();
+        const recency = ageMs > 0 ? Math.pow(0.5, ageMs / RECENCY_HALF_LIFE_MS) : 1.0;
+        const score = 0.70 * similarity + 0.15 * recency + 0.15 * (m.importance || 0);
         return { memory: m, score };
       });
 

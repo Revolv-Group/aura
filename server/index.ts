@@ -379,10 +379,11 @@ app.use((req, res, next) => {
 
     // Initialize memory systems (non-blocking)
     try {
-      // Qdrant: create collections if they don't exist
-      import('./memory/qdrant-store').then(({ initCollections }) =>
+      // Qdrant: create collections if they don't exist, then ensure indexes
+      import('./memory/qdrant-store').then(({ initCollections, ensurePayloadIndexes }) =>
         initCollections()
-          .then(() => log('✓ Qdrant collections initialized'))
+          .then(() => ensurePayloadIndexes())
+          .then(() => log('✓ Qdrant collections + indexes initialized'))
           .catch((err: any) => log('⚠ Qdrant init deferred:', err.message))
       );
 

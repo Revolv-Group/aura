@@ -86,6 +86,10 @@ export async function initCollections(): Promise<void> {
             field_name: "timestamp",
             field_schema: "integer",
           });
+          await qdrant.createPayloadIndex(name, {
+            field_name: "importance",
+            field_schema: "float",
+          });
         }
 
         if (name === QDRANT_COLLECTIONS.COMPACTED_MEMORIES) {
@@ -100,6 +104,10 @@ export async function initCollections(): Promise<void> {
           await qdrant.createPayloadIndex(name, {
             field_name: "timestamp",
             field_schema: "integer",
+          });
+          await qdrant.createPayloadIndex(name, {
+            field_name: "importance",
+            field_schema: "float",
           });
         }
 
@@ -119,6 +127,37 @@ export async function initCollections(): Promise<void> {
     } catch (error) {
       logger.error({ error, collection: name }, "Failed to init Qdrant collection");
       throw error;
+    }
+  }
+}
+
+/**
+ * Ensure payload indexes exist on existing collections.
+ * Safe to call repeatedly — Qdrant ignores duplicate index creation.
+ * Call this on startup to add new indexes to pre-existing collections.
+ */
+export async function ensurePayloadIndexes(): Promise<void> {
+  const qdrant = getClient();
+
+  const indexSpecs: Array<{ collection: string; field: string; schema: string }> = [
+    { collection: QDRANT_COLLECTIONS.RAW_MEMORIES, field: "importance", schema: "float" },
+    { collection: QDRANT_COLLECTIONS.COMPACTED_MEMORIES, field: "importance", schema: "float" },
+  ];
+
+  for (const spec of indexSpecs) {
+    try {
+      await qdrant.createPayloadIndex(spec.collection, {
+        field_name: spec.field,
+        field_schema: spec.schema as any,
+      });
+      logger.info({ collection: spec.collection, field: spec.field }, "Created payload index");
+    } catch (error: any) {
+      // Index already exists — safe to ignore
+      if (error?.message?.includes("already exists") || error?.status === 400) {
+        logger.debug({ collection: spec.collection, field: spec.field }, "Payload index already exists");
+      } else {
+        logger.warn({ error, collection: spec.collection, field: spec.field }, "Failed to create payload index");
+      }
     }
   }
 }
@@ -484,7 +523,13 @@ export async function searchCollection(
 }
 
 /**
- * Search across all memory collections
+ * Search across all memory collections with metadata pre-filtering.
+ *
+ * Pre-filters (applied at Qdrant index level before ANN search):
+ * - domainFilter: restrict to a specific domain
+ * - minImportance: exclude low-signal memories (e.g., >= 0.4)
+ * - maxAgeDays: exclude old memories (e.g., last 90 days)
+ * - entityTypes: restrict entity_index to specific types
  */
 export async function searchAllCollections(
   query: string,
@@ -493,6 +538,9 @@ export async function searchAllCollections(
     min_score?: number;
     collections?: string[];
     domainFilter?: string;
+    minImportance?: number;
+    maxAgeDays?: number;
+    entityTypes?: string[];
   } = {}
 ): Promise<QdrantSearchResult[]> {
   const {
@@ -504,14 +552,42 @@ export async function searchAllCollections(
       QDRANT_COLLECTIONS.ENTITY_INDEX,
     ],
     domainFilter,
+    minImportance,
+    maxAgeDays,
+    entityTypes,
   } = options;
 
-  const filter = domainFilter
-    ? { must: [{ key: "domain", match: { value: domainFilter } }] }
-    : undefined;
+  // Build per-collection filters (different collections have different indexed fields)
+  const buildFilter = (collection: string) => {
+    const conditions: Array<Record<string, unknown>> = [];
+
+    // Domain filter (indexed on raw_memories and compacted_memories)
+    if (domainFilter && collection !== QDRANT_COLLECTIONS.ENTITY_INDEX) {
+      conditions.push({ key: "domain", match: { value: domainFilter } });
+    }
+
+    // Importance pre-filter (available on raw_memories and compacted_memories)
+    if (minImportance !== undefined && collection !== QDRANT_COLLECTIONS.ENTITY_INDEX) {
+      conditions.push({ key: "importance", range: { gte: minImportance } });
+    }
+
+    // Timestamp pre-filter (indexed on raw_memories and compacted_memories)
+    if (maxAgeDays !== undefined && collection !== QDRANT_COLLECTIONS.ENTITY_INDEX) {
+      const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+      conditions.push({ key: "timestamp", range: { gte: cutoffMs } });
+    }
+
+    // Entity type filter (only on entity_index)
+    if (entityTypes && entityTypes.length > 0 && collection === QDRANT_COLLECTIONS.ENTITY_INDEX) {
+      // Use must with any_of for multiple entity types
+      conditions.push({ key: "entity_type", match: { any: entityTypes } });
+    }
+
+    return conditions.length > 0 ? { must: conditions } : undefined;
+  };
 
   const searchPromises = collections.map((col) =>
-    searchCollection(col, query, { limit, min_score, filter })
+    searchCollection(col, query, { limit, min_score, filter: buildFilter(col) })
   );
 
   const allResults = (await Promise.all(searchPromises)).flat();

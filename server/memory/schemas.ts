@@ -135,6 +135,10 @@ export const memorySearchOptionsSchema = z.object({
   include_raw: z.boolean().default(false),
   include_compacted: z.boolean().default(true),
   include_entities: z.boolean().default(true),
+  // Metadata pre-filters (reduce candidate set before vector search)
+  minImportance: z.number().min(0).max(1).optional(),
+  maxAgeDays: z.number().int().min(1).optional(),
+  entityTypes: z.array(entityTypeSchema).optional(),
 });
 export type MemorySearchOptions = z.infer<typeof memorySearchOptionsSchema>;
 
