@@ -85,7 +85,7 @@ export async function retrieveMemories(
   const {
     limit = 10,
     min_score = 0.25,
-    include_raw = false,
+    include_raw = true,
     include_compacted = true,
     include_entities = true,
     domains,

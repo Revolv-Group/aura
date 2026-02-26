@@ -132,7 +132,7 @@ export const memorySearchOptionsSchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
   min_score: z.number().min(0).max(1).default(0.25),
   domains: z.array(memoryDomainSchema).optional(),
-  include_raw: z.boolean().default(false),
+  include_raw: z.boolean().default(true),
   include_compacted: z.boolean().default(true),
   include_entities: z.boolean().default(true),
   // Metadata pre-filters (reduce candidate set before vector search)
