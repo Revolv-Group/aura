@@ -83,7 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PIPELINE HEALTH CHECK (No auth required — monitoring endpoint)
   // ============================================================================
 
-  app.get('/api/health/pipeline', async (req, res) => {
+  app.get('/api/pipeline-health', async (req, res) => {
     try {
       const { runPipelineHealthCheck } = await import("../agents/scheduled-jobs");
       const result = await runPipelineHealthCheck();
