@@ -9,7 +9,7 @@ tools: [web_search, deep_research, create_task, create_doc, search_knowledge_bas
 permissions: [read, create_task, create_doc, create_project, create_phase, create_capture, write, delegate]
 delegates_to: [growth-specialist, seo-specialist, social-media-manager, content-strategist]
 max_delegation_depth: 2
-model_tier: top
+model_tier: mid
 temperature: 0.7
 schedule:
   weekly_report: "0 17 * * 5"

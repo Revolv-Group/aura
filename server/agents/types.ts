@@ -24,7 +24,7 @@ export interface AgentSoulFrontmatter {
   permissions: string[];
   delegates_to: string[];
   max_delegation_depth: number;
-  model_tier: "auto" | "top" | "mid" | "fast";
+  model_tier: "auto" | "top" | "mid" | "fast" | "local";
   temperature: number;
   schedule?: Record<string, string>; // { "task_name": "cron_expression" }
   memory_scope: "isolated" | "shared" | "inherit_parent";
@@ -174,6 +174,7 @@ export const MODEL_TIER_DEFAULTS: Record<string, string> = {
   top: "anthropic/claude-opus-4",
   mid: "anthropic/claude-sonnet-4",
   fast: "anthropic/claude-3.5-haiku",
+  local: "local/auto",
 };
 
 export const ROLE_TO_MODEL_TIER: Record<string, string> = {

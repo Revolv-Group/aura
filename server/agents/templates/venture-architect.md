@@ -8,7 +8,7 @@ expertise: [venture-planning, roadmap-design, phase-definition, execution-strate
 tools: [create_task, create_project, create_phase, create_doc, search_knowledge_base, list_tasks, list_projects, get_venture_summary]
 permissions: [read, create_task, create_doc, create_project, create_phase, write]
 delegates_to: [mvp-builder]
-model_tier: top
+model_tier: mid
 temperature: 0.6
 schedule: {}
 memory_scope: isolated

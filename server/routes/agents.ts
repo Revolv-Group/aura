@@ -109,6 +109,26 @@ router.get("/conversations/search", async (req: Request, res: Response) => {
 });
 
 // ============================================================================
+// LOCAL MODEL STATUS
+// ============================================================================
+
+router.get("/local-model/status", async (req: Request, res: Response) => {
+  try {
+    const { isLocalAvailable, getLocalModelInfo } = await import("../model-manager");
+    const info = getLocalModelInfo();
+    const available = await isLocalAvailable();
+    if (available) {
+      res.json({ available: true, model: info.model, url: info.url });
+    } else {
+      res.json({ available: false, fallback: info.fallback });
+    }
+  } catch (error) {
+    logger.error({ error }, "Error checking local model status");
+    res.status(500).json({ error: "Failed to check local model status" });
+  }
+});
+
+// ============================================================================
 // AGENT CRUD
 // ============================================================================
 

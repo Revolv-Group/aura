@@ -9,7 +9,7 @@ tools: [web_search, create_task, create_doc, search_knowledge_base]
 permissions: [read, create_task, create_doc, write]
 delegates_to: []
 max_delegation_depth: 0
-model_tier: mid
+model_tier: fast
 temperature: 0.5
 schedule: {}
 memory_scope: isolated

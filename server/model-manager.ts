@@ -21,6 +21,114 @@ function getOpenAIClient(): OpenAI {
   return openai;
 }
 
+// ============================================================================
+// LOCAL MODEL (LM Studio / Qwen 3.5)
+// ============================================================================
+
+const LM_STUDIO_URL = process.env.LOCAL_MODEL_URL || "http://localhost:1234/v1";
+const LOCAL_MODEL_NAME = process.env.LOCAL_MODEL_NAME || "qwen3.5-35b-a3b";
+const LOCAL_FALLBACK_MODEL = "anthropic/claude-3.5-haiku";
+
+let localClient: OpenAI | null = null;
+
+function getLocalClient(): OpenAI {
+  if (!localClient) {
+    localClient = new OpenAI({
+      apiKey: "lm-studio", // LM Studio doesn't require a real key
+      baseURL: LM_STUDIO_URL,
+    });
+  }
+  return localClient;
+}
+
+// Cached health check to avoid hammering the local endpoint
+let localAvailableCache: { available: boolean; checkedAt: number } | null = null;
+const LOCAL_HEALTH_CACHE_TTL = 60_000; // 60 seconds
+
+export async function isLocalAvailable(): Promise<boolean> {
+  if (localAvailableCache && Date.now() - localAvailableCache.checkedAt < LOCAL_HEALTH_CACHE_TTL) {
+    return localAvailableCache.available;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const response = await fetch(`${LM_STUDIO_URL}/models`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const available = response.ok;
+    localAvailableCache = { available, checkedAt: Date.now() };
+    return available;
+  } catch {
+    localAvailableCache = { available: false, checkedAt: Date.now() };
+    return false;
+  }
+}
+
+export function getLocalModelInfo() {
+  return { url: LM_STUDIO_URL, model: LOCAL_MODEL_NAME, fallback: LOCAL_FALLBACK_MODEL };
+}
+
+/**
+ * Chat completion via local LM Studio model.
+ * Falls back to cloud fast tier (Haiku) on failure.
+ */
+async function localChatCompletion(
+  params: ChatCompletionParams,
+): Promise<{
+  response: OpenAI.Chat.ChatCompletion;
+  metrics: ModelMetrics;
+}> {
+  const startTime = Date.now();
+
+  // Check if local is available first
+  const available = await isLocalAvailable();
+  if (available) {
+    try {
+      logger.info({ model: LOCAL_MODEL_NAME }, `Attempting local chat completion`);
+      const response = await getLocalClient().chat.completions.create({
+        model: LOCAL_MODEL_NAME,
+        messages: params.messages,
+        tools: params.tools,
+        tool_choice: params.tool_choice,
+        temperature: params.temperature ?? 0.7,
+        max_tokens: params.max_tokens,
+        response_format: params.response_format,
+      });
+
+      const latencyMs = Date.now() - startTime;
+      const modelTag = `local/${LOCAL_MODEL_NAME}`;
+      logger.info({
+        model: modelTag,
+        tokensUsed: response.usage?.total_tokens,
+        latencyMs,
+      }, `Local chat completion successful`);
+
+      return {
+        response,
+        metrics: {
+          modelUsed: modelTag,
+          attemptNumber: 1,
+          totalAttempts: 1,
+          success: true,
+          tokensUsed: response.usage?.total_tokens,
+          latencyMs,
+        },
+      };
+    } catch (error: any) {
+      logger.warn({ error: error.message }, `Local model failed, falling back to cloud`);
+      // Invalidate cache so next call re-checks
+      localAvailableCache = null;
+    }
+  } else {
+    logger.info(`Local model unavailable, falling back to ${LOCAL_FALLBACK_MODEL}`);
+  }
+
+  // Fallback to cloud fast tier
+  return chatCompletion(params, "simple", LOCAL_FALLBACK_MODEL);
+}
+
 // Model configuration with fallback cascade (OpenRouter model names)
 export const MODEL_CASCADE = [
   { name: "openai/gpt-4o", maxRetries: 2, description: "Primary - Best quality" },
@@ -110,6 +218,11 @@ export async function chatCompletion(
   response: OpenAI.Chat.ChatCompletion;
   metrics: ModelMetrics;
 }> {
+  // Route local/ prefix to local model pipeline
+  if (preferredModel && preferredModel.startsWith("local/")) {
+    return localChatCompletion(params);
+  }
+
   // Use preferred model if specified, otherwise select based on complexity
   const selectedModel = preferredModel || selectModelForTask(complexity);
   const startIndex = MODEL_CASCADE.findIndex((m) => m.name === selectedModel);

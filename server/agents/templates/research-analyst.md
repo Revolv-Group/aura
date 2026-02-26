@@ -9,7 +9,7 @@ tools: [web_search, create_doc, search_knowledge_base, market_analyze, submit_de
 permissions: [read, create_doc, write]
 delegates_to: []
 max_delegation_depth: 0
-model_tier: mid
+model_tier: fast
 temperature: 0.4
 schedule: {}
 memory_scope: isolated

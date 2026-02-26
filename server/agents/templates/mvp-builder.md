@@ -9,7 +9,7 @@ tools: [create_task, create_doc, create_project, create_phase, search_knowledge_
 permissions: [read, create_task, create_doc, create_project, create_phase, write]
 delegates_to: []
 max_delegation_depth: 0
-model_tier: mid
+model_tier: fast
 temperature: 0.6
 schedule: {}
 memory_scope: isolated

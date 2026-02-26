@@ -9,7 +9,7 @@ tools: [create_task, create_doc, search_knowledge_base, delegate, web_search, de
 permissions: [read, create_task, create_doc, create_project, create_phase, write, delegate]
 delegates_to: []
 max_delegation_depth: 2
-model_tier: top
+model_tier: mid
 temperature: 0.5
 schedule:
   tech_review: "0 10 * * 3"

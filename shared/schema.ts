@@ -3163,7 +3163,7 @@ export const agents = pgTable(
 
     // Model configuration
     preferredModel: text("preferred_model"),
-    modelTier: text("model_tier").$type<'auto' | 'top' | 'mid' | 'fast'>().default('auto'),
+    modelTier: text("model_tier").$type<'auto' | 'top' | 'mid' | 'fast' | 'local'>().default('auto'),
     temperature: real("temperature").default(0.7),
     maxTokens: integer("max_tokens").default(4096),
 
