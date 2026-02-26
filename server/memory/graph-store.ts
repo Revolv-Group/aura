@@ -34,13 +34,30 @@ let dbInstance: any = null;
 async function getGraph() {
   if (graphInstance) return graphInstance;
 
-  const url = process.env.FALKORDB_URL;
-  if (!url) {
+  const rawUrl = process.env.FALKORDB_URL;
+  if (!rawUrl) {
     throw new Error("FALKORDB_URL not configured");
   }
 
   const { FalkorDB } = await import("falkordb");
-  dbInstance = await FalkorDB.connect({ url });
+
+  // FalkorDB Cloud requires TLS. If the URL uses redis:// but points to a cloud host,
+  // upgrade to rediss:// so the underlying @redis/client enables TLS.
+  const isCloudHost = rawUrl.includes('.cloud') || rawUrl.includes('falkordb.com');
+  const needsTls = isCloudHost && rawUrl.startsWith('redis://');
+  const url = needsTls ? rawUrl.replace('redis://', 'rediss://') : rawUrl;
+
+  if (needsTls) {
+    logger.info("FalkorDB: upgraded to TLS (rediss://) for cloud host");
+  }
+
+  try {
+    dbInstance = await FalkorDB.connect({ url });
+  } catch (err: any) {
+    // Redis client errors often serialize as {} — extract the real message
+    const msg = err?.message || err?.code || String(err);
+    throw new Error(`FalkorDB connection failed: ${msg}`);
+  }
   graphInstance = dbInstance.selectGraph(GRAPH_NAME);
 
   return graphInstance;
@@ -62,21 +79,17 @@ export async function isGraphAvailable(): Promise<boolean> {
 // ============================================================================
 
 export async function initGraphSchema(): Promise<void> {
-  try {
-    const graph = await getGraph();
+  const graph = await getGraph();
 
-    // Create indexes for fast lookups
-    await graph.createNodeRangeIndex("Entity", "id", "name", "type").catch(() => {});
-    await graph.createNodeRangeIndex("Memory", "id", "domain").catch(() => {});
-    await graph.createNodeRangeIndex("Decision", "id").catch(() => {});
-    await graph.createNodeRangeIndex("Agent", "id", "slug").catch(() => {});
-    await graph.createNodeRangeIndex("Venture", "id").catch(() => {});
-    await graph.createEdgeRangeIndex("RELATES_TO", "relationship").catch(() => {});
+  // Create indexes for fast lookups (individual .catch to ignore "index already exists")
+  await graph.createNodeRangeIndex("Entity", "id", "name", "type").catch(() => {});
+  await graph.createNodeRangeIndex("Memory", "id", "domain").catch(() => {});
+  await graph.createNodeRangeIndex("Decision", "id").catch(() => {});
+  await graph.createNodeRangeIndex("Agent", "id", "slug").catch(() => {});
+  await graph.createNodeRangeIndex("Venture", "id").catch(() => {});
+  await graph.createEdgeRangeIndex("RELATES_TO", "relationship").catch(() => {});
 
-    logger.info("FalkorDB graph schema initialized");
-  } catch (error) {
-    logger.warn({ error }, "FalkorDB schema init failed (may not be connected)");
-  }
+  logger.info("FalkorDB graph schema initialized");
 }
 
 // ============================================================================

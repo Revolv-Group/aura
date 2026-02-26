@@ -348,7 +348,18 @@ app.use((req, res, next) => {
         )
       );
 
-      // Initialize agent scheduler (proactive agent execution)
+      // Sync agent templates to DB on startup (ensures new schedule entries, tools, permissions are applied)
+      try {
+        const agentPath = await import('path');
+        const { seedFromTemplates } = await import('./agents/agent-registry');
+        const templateDir = agentPath.default.resolve(process.cwd(), 'server', 'agents', 'templates');
+        const syncResult = await seedFromTemplates(templateDir);
+        log(`Agent templates synced (${syncResult.seeded} updated, ${syncResult.skipped} skipped)`);
+      } catch (syncError) {
+        log('Agent template sync skipped: ' + String(syncError));
+      }
+
+      // Initialize agent scheduler (proactive agent execution — reads schedules from DB)
       const { initializeScheduler } = await import('./agents/agent-scheduler');
       await initializeScheduler();
 
