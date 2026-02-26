@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, subDays, addDays, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,6 +36,11 @@ import {
   TrendingUp,
   Heart,
   Settings,
+  Plus,
+  Trash2,
+  Apple,
+  Flame,
+  Beef,
   type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -89,6 +94,21 @@ interface HealthEntry {
   notes: string | null;
 }
 
+interface NutritionEntry {
+  id: number;
+  dayId: string | null;
+  datetime: string;
+  mealType: string;
+  description: string;
+  calories: number | null;
+  proteinG: number | null;
+  carbsG: number | null;
+  fatsG: number | null;
+  context: string | null;
+  tags: string | null;
+  notes: string | null;
+}
+
 interface Venture {
   id: string;
   name: string;
@@ -132,6 +152,21 @@ const ICON_MAP: Record<string, LucideIcon> = {
 const getIconComponent = (iconName: string): LucideIcon => ICON_MAP[iconName] || Sun;
 
 // ============================================================================
+// DEBOUNCE HOOK
+// ============================================================================
+
+function useDebouncedCallback<T extends (...args: any[]) => void>(callback: T, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+
+  return useCallback((...args: Parameters<T>) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => callbackRef.current(...args), delay);
+  }, [delay]) as T;
+}
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -144,6 +179,7 @@ export default function DailyPage() {
   const selectedDate = params?.date || todayDate;
   const isViewingToday = selectedDate === todayDate;
   const currentDate = parseISO(selectedDate);
+  const dayId = `day_${selectedDate}`;
 
   // Navigation
   const goToPreviousDay = () => setLocation(`/today/${format(subDays(currentDate, 1), "yyyy-MM-dd")}`);
@@ -170,20 +206,14 @@ export default function DailyPage() {
     primaryVentureFocus: "",
   });
 
-  // Health (morning section)
+  // Health
   const [health, setHealth] = useState({
     sleepHours: "" as string | number,
     sleepQuality: "",
     energyLevel: "" as string | number,
+    mood: "",
     weightKg: "" as string | number,
     bodyFatPercent: "" as string | number,
-  });
-
-  // Evening section
-  const [evening, setEvening] = useState({
-    reflectionPm: "",
-    fastingHours: "" as string | number,
-    deepWorkHours: "" as string | number,
     stressLevel: "",
     steps: "" as string | number,
     workoutDone: false,
@@ -191,7 +221,23 @@ export default function DailyPage() {
     workoutDurationMin: "" as string | number,
   });
 
+  // Evening
+  const [evening, setEvening] = useState({
+    reflectionPm: "",
+    journalEntry: "",
+    fastingHours: "" as string | number,
+    deepWorkHours: "" as string | number,
+  });
+
   const [healthEntryId, setHealthEntryId] = useState<number | null>(null);
+
+  // Nutrition
+  const [newMeal, setNewMeal] = useState({
+    mealType: "",
+    description: "",
+    calories: "" as string | number,
+    proteinG: "" as string | number,
+  });
 
   // ---- DATA FETCHING ----
 
@@ -241,6 +287,15 @@ export default function DailyPage() {
     },
   });
 
+  const { data: nutritionEntries = [], isLoading: isNutritionLoading } = useQuery<NutritionEntry[]>({
+    queryKey: ["/api/nutrition", { date: selectedDate }],
+    queryFn: async () => {
+      const res = await fetch(`/api/nutrition?startDate=${selectedDate}&endDate=${selectedDate}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return await res.json();
+    },
+  });
+
   const priorityTasksDueToday = dueTasks.filter(
     (task) => (task.priority === "P0" || task.priority === "P1") && task.status !== "completed" && task.status !== "on_hold"
   );
@@ -250,6 +305,14 @@ export default function DailyPage() {
   const completedTasks = Array.isArray(tasks) ? tasks.filter((t) => t.status === "completed").length : 0;
   const totalTasks = Array.isArray(tasks) ? tasks.length : 0;
   const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const totalCalories = Array.isArray(nutritionEntries)
+    ? nutritionEntries.reduce((sum, e) => sum + (e.calories || 0), 0)
+    : 0;
+  const totalProtein = Array.isArray(nutritionEntries)
+    ? nutritionEntries.reduce((sum, e) => sum + (e.proteinG || 0), 0)
+    : 0;
+  const mealCount = Array.isArray(nutritionEntries) ? nutritionEntries.length : 0;
 
   // ---- EFFECTS: Initialize state from fetched data ----
 
@@ -268,9 +331,10 @@ export default function DailyPage() {
       { text: "", completed: false },
     ]);
     setPlanning({ oneThingToShip: "", reflectionAm: "", primaryVentureFocus: "" });
-    setHealth({ sleepHours: "", sleepQuality: "", energyLevel: "", weightKg: "", bodyFatPercent: "" });
-    setEvening({ reflectionPm: "", fastingHours: "", deepWorkHours: "", stressLevel: "", steps: "", workoutDone: false, workoutType: "", workoutDurationMin: "" });
+    setHealth({ sleepHours: "", sleepQuality: "", energyLevel: "", mood: "", weightKg: "", bodyFatPercent: "", stressLevel: "", steps: "", workoutDone: false, workoutType: "", workoutDurationMin: "" });
+    setEvening({ reflectionPm: "", journalEntry: "", fastingHours: "", deepWorkHours: "" });
     setHealthEntryId(null);
+    setNewMeal({ mealType: "", description: "", calories: "", proteinG: "" });
   }, [selectedDate]);
 
   // Initialize rituals from config
@@ -325,6 +389,7 @@ export default function DailyPage() {
       setEvening((prev) => ({
         ...prev,
         reflectionPm: dayData.reflectionPm || "",
+        journalEntry: dayData.eveningRituals?.journalEntry || "",
         fastingHours: dayData.eveningRituals?.fastingHours || "",
         deepWorkHours: dayData.eveningRituals?.deepWorkHours || "",
       }));
@@ -340,17 +405,15 @@ export default function DailyPage() {
         sleepHours: entry.sleepHours ?? "",
         sleepQuality: entry.sleepQuality ?? "",
         energyLevel: entry.energyLevel ?? "",
+        mood: entry.mood ?? "",
         weightKg: entry.weightKg ?? "",
         bodyFatPercent: entry.bodyFatPercent ?? "",
-      });
-      setEvening((prev) => ({
-        ...prev,
         stressLevel: entry.stressLevel ?? "",
         steps: entry.steps ?? "",
         workoutDone: entry.workoutDone || false,
         workoutType: entry.workoutType ?? "",
         workoutDurationMin: entry.workoutDurationMin ?? "",
-      }));
+      });
     }
   }, [healthEntries]);
 
@@ -382,7 +445,46 @@ export default function DailyPage() {
     });
   };
 
-  // ---- SAVE ----
+  // ---- NUTRITION MUTATIONS ----
+
+  const addMealMutation = useMutation({
+    mutationFn: async () => {
+      const cal = typeof newMeal.calories === "string" ? parseFloat(newMeal.calories) : newMeal.calories;
+      const pro = typeof newMeal.proteinG === "string" ? parseFloat(newMeal.proteinG) : newMeal.proteinG;
+      const payload: Record<string, any> = {
+        dayId,
+        datetime: new Date().toISOString(),
+        mealType: newMeal.mealType,
+        description: newMeal.description,
+      };
+      if (cal) payload.calories = cal;
+      if (pro) payload.proteinG = pro;
+      await apiRequest("POST", "/api/nutrition", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/nutrition"] });
+      setNewMeal({ mealType: "", description: "", calories: "", proteinG: "" });
+      toast({ title: "Meal logged", description: "Nutrition entry saved." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save meal.", variant: "destructive" });
+    },
+  });
+
+  const deleteMealMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/nutrition/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/nutrition"] });
+      toast({ title: "Deleted", description: "Meal entry removed." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete meal.", variant: "destructive" });
+    },
+  });
+
+  // ---- SAVE ALL ----
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -405,8 +507,8 @@ export default function DailyPage() {
       const fastingH = typeof evening.fastingHours === "string" ? parseFloat(evening.fastingHours) || 0 : evening.fastingHours;
       const deepWorkH = typeof evening.deepWorkHours === "string" ? parseFloat(evening.deepWorkHours) || 0 : evening.deepWorkHours;
       const eveningRituals = {
-        reviewCompleted: !!evening.reflectionPm || fastingH > 0 || deepWorkH > 0,
-        journalEntry: evening.reflectionPm || undefined,
+        reviewCompleted: !!evening.reflectionPm || !!evening.journalEntry || fastingH > 0 || deepWorkH > 0,
+        journalEntry: evening.journalEntry || undefined,
         fastingHours: fastingH || undefined,
         fastingCompleted: fastingH >= 16,
         deepWorkHours: deepWorkH || undefined,
@@ -416,7 +518,7 @@ export default function DailyPage() {
       const filteredOutcomes = top3Outcomes.filter((o) => o.text.trim());
 
       const dayPayload = {
-        id: `day_${selectedDate}`,
+        id: dayId,
         date: selectedDate,
         morningRituals,
         top3Outcomes: filteredOutcomes.length > 0 ? top3Outcomes : null,
@@ -435,30 +537,27 @@ export default function DailyPage() {
       }
 
       // Save health data
-      const healthPayload: Record<string, any> = {
-        date: selectedDate,
-      };
       const sleepH = typeof health.sleepHours === "string" ? parseFloat(health.sleepHours) : health.sleepHours;
       const energyL = typeof health.energyLevel === "string" ? parseInt(String(health.energyLevel)) : health.energyLevel;
       const weightK = typeof health.weightKg === "string" ? parseFloat(health.weightKg) : health.weightKg;
       const bodyFatP = typeof health.bodyFatPercent === "string" ? parseFloat(health.bodyFatPercent) : health.bodyFatPercent;
-      const stepsN = typeof evening.steps === "string" ? parseInt(String(evening.steps)) : evening.steps;
-      const workoutDurN = typeof evening.workoutDurationMin === "string" ? parseInt(String(evening.workoutDurationMin)) : evening.workoutDurationMin;
+      const stepsN = typeof health.steps === "string" ? parseInt(String(health.steps)) : health.steps;
+      const workoutDurN = typeof health.workoutDurationMin === "string" ? parseInt(String(health.workoutDurationMin)) : health.workoutDurationMin;
 
+      const healthPayload: Record<string, any> = { date: selectedDate };
       if (sleepH) healthPayload.sleepHours = sleepH;
       if (health.sleepQuality) healthPayload.sleepQuality = health.sleepQuality;
       if (energyL) healthPayload.energyLevel = energyL;
+      if (health.mood) healthPayload.mood = health.mood;
       if (weightK) healthPayload.weightKg = weightK;
       if (bodyFatP) healthPayload.bodyFatPercent = bodyFatP;
-      if (evening.stressLevel) healthPayload.stressLevel = evening.stressLevel;
+      if (health.stressLevel) healthPayload.stressLevel = health.stressLevel;
       if (stepsN) healthPayload.steps = stepsN;
-      healthPayload.workoutDone = evening.workoutDone;
-      if (evening.workoutType) healthPayload.workoutType = evening.workoutType;
+      healthPayload.workoutDone = health.workoutDone;
+      if (health.workoutType) healthPayload.workoutType = health.workoutType;
       if (workoutDurN) healthPayload.workoutDurationMin = workoutDurN;
 
-      // Only save health if there's something to save
-      const hasHealthData = sleepH || health.sleepQuality || energyL || weightK || bodyFatP || evening.stressLevel || stepsN || evening.workoutDone;
-
+      const hasHealthData = sleepH || health.sleepQuality || energyL || health.mood || weightK || bodyFatP || health.stressLevel || stepsN || health.workoutDone;
       if (hasHealthData) {
         if (healthEntryId) {
           await apiRequest("PATCH", `/api/health/${healthEntryId}`, healthPayload);
@@ -470,12 +569,18 @@ export default function DailyPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/days"] });
       queryClient.invalidateQueries({ queryKey: ["/api/health"] });
-      toast({ title: "Saved!", description: "Your daily log has been saved." });
+      toast({ title: "Saved", description: "Your daily log has been saved." });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to save. Please try again.", variant: "destructive" });
     },
   });
+
+  // ---- AUTO-SAVE (debounced) ----
+
+  const debouncedSave = useDebouncedCallback(() => {
+    saveMutation.mutate();
+  }, 2000);
 
   // ---- COMPUTED ----
 
@@ -487,14 +592,32 @@ export default function DailyPage() {
   const fastingH = typeof evening.fastingHours === "string" ? parseFloat(evening.fastingHours) || 0 : evening.fastingHours;
   const deepWorkH = typeof evening.deepWorkHours === "string" ? parseFloat(evening.deepWorkHours) || 0 : evening.deepWorkHours;
 
+  // Section completion tracking
+  const habitsComplete = enabledHabits.length > 0 && isAllRitualsComplete();
+  const healthComplete = !!(health.sleepHours && health.sleepQuality && health.energyLevel);
+  const planComplete = !!(top3Outcomes.some((o) => o.text.trim()) && planning.oneThingToShip);
+  const mealsLogged = mealCount > 0;
+  const eveningComplete = !!(evening.reflectionPm || evening.journalEntry);
+
+  const sectionsCompleted = [habitsComplete, healthComplete, planComplete, mealsLogged, eveningComplete].filter(Boolean).length;
+
   // ---- LOADING ----
 
   if (isDayLoading || isConfigLoading) {
     return (
       <div className="container mx-auto p-4 md:p-6">
         <div className="space-y-6">
-          <div className="h-20 bg-muted animate-pulse rounded" />
-          <div className="h-96 bg-muted animate-pulse rounded" />
+          <div className="h-20 bg-muted animate-pulse rounded-lg" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="h-48 bg-muted animate-pulse rounded-lg" />
+              <div className="h-64 bg-muted animate-pulse rounded-lg" />
+            </div>
+            <div className="space-y-4">
+              <div className="h-48 bg-muted animate-pulse rounded-lg" />
+              <div className="h-64 bg-muted animate-pulse rounded-lg" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -503,25 +626,32 @@ export default function DailyPage() {
   // ---- RENDER ----
 
   return (
-    <div className="container mx-auto p-4 md:p-6 max-w-3xl space-y-6">
-      {/* Header */}
+    <div className="container mx-auto p-4 md:p-6 max-w-7xl space-y-5">
+      {/* ================================================================ */}
+      {/* HEADER                                                           */}
+      {/* ================================================================ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 sm:p-3 bg-amber-100 dark:bg-amber-900/30 rounded-full shrink-0">
-            <Sun className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400" />
+          <div className="p-2.5 bg-amber-500/10 rounded-xl shrink-0">
+            <Sun className="h-7 w-7 text-amber-500" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Today</h1>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Today</h1>
+              <Badge variant="outline" className="text-[10px] font-mono tabular-nums">
+                {sectionsCompleted}/5
+              </Badge>
+            </div>
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={goToPreviousDay} title="Previous day">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="font-medium">{format(currentDate, "EEEE, MMMM d, yyyy")}</span>
+              <span className="font-medium">{format(currentDate, "EEEE, MMMM d")}</span>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={goToNextDay} disabled={isViewingToday} title="Next day">
                 <ChevronRight className="h-4 w-4" />
               </Button>
               {!isViewingToday && (
-                <Button variant="outline" size="sm" className="h-6 text-xs ml-2" onClick={goToToday}>
+                <Button variant="outline" size="sm" className="h-6 text-xs ml-1" onClick={goToToday}>
                   <Calendar className="h-3 w-3 mr-1" />
                   Today
                 </Button>
@@ -531,545 +661,730 @@ export default function DailyPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!isViewingToday && (
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-              Viewing Past Day
+            <Badge variant="secondary" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+              Past Day
             </Badge>
           )}
-          <Button variant="outline" size="icon" asChild>
+          <Button variant="outline" size="icon" className="h-8 w-8" asChild>
             <Link href="/settings">
               <Settings className="h-4 w-4" />
             </Link>
           </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm">
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="sm" className="h-8 px-4 font-semibold">
             {saveMutation.isPending ? "Saving..." : "Save All"}
           </Button>
         </div>
       </div>
 
+      {/* Section completion bar */}
+      <div className="flex gap-1.5">
+        {[
+          { done: habitsComplete, label: "Habits", color: "bg-orange-500" },
+          { done: healthComplete, label: "Health", color: "bg-rose-500" },
+          { done: planComplete, label: "Plan", color: "bg-blue-500" },
+          { done: mealsLogged, label: "Meals", color: "bg-green-500" },
+          { done: eveningComplete, label: "Review", color: "bg-indigo-500" },
+        ].map((s) => (
+          <div key={s.label} className="flex-1">
+            <div className={`h-1.5 rounded-full transition-colors ${s.done ? s.color : "bg-muted"}`} />
+            <p className={`text-[10px] text-center mt-1 ${s.done ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+              {s.label}
+            </p>
+          </div>
+        ))}
+      </div>
+
       {/* ================================================================ */}
-      {/* MORNING SECTION */}
+      {/* TWO-COLUMN GRID                                                  */}
       {/* ================================================================ */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Sun className="h-5 w-5 text-amber-500" />
-          <h2 className="text-lg font-semibold">Morning</h2>
-          {isAllRitualsComplete() && enabledHabits.length > 0 && (
-            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 ml-auto">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Habits Complete
-            </Badge>
-          )}
-        </div>
-
-        {/* Health Metrics Card */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Heart className="h-4 w-4 text-rose-500" />
-              Health Metrics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {/* Sleep Hours */}
-              <div className="space-y-1.5">
-                <Label htmlFor="sleep-hours" className="text-xs text-muted-foreground">Sleep (hours)</Label>
-                <Input
-                  id="sleep-hours"
-                  type="number"
-                  min={0}
-                  max={16}
-                  step={0.5}
-                  placeholder="7.5"
-                  value={health.sleepHours}
-                  onChange={(e) => setHealth({ ...health, sleepHours: e.target.value })}
-                  className="h-9"
-                />
-              </div>
-
-              {/* Sleep Quality */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Sleep Quality</Label>
-                <Select value={health.sleepQuality} onValueChange={(v) => setHealth({ ...health, sleepQuality: v })}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="poor">Poor</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Energy Level */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Energy (1-5)</Label>
-                <Select
-                  value={String(health.energyLevel || "")}
-                  onValueChange={(v) => setHealth({ ...health, energyLevel: v })}
-                >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Weight */}
-              <div className="space-y-1.5">
-                <Label htmlFor="weight" className="text-xs text-muted-foreground">Weight (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  placeholder="82"
-                  value={health.weightKg}
-                  onChange={(e) => setHealth({ ...health, weightKg: e.target.value })}
-                  className="h-9"
-                />
-              </div>
-
-              {/* Body Fat */}
-              <div className="space-y-1.5">
-                <Label htmlFor="body-fat" className="text-xs text-muted-foreground">Body Fat %</Label>
-                <Input
-                  id="body-fat"
-                  type="number"
-                  min={0}
-                  max={60}
-                  step={0.1}
-                  placeholder="15"
-                  value={health.bodyFatPercent}
-                  onChange={(e) => setHealth({ ...health, bodyFatPercent: e.target.value })}
-                  className="h-9"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Morning Habits Card */}
-        {enabledHabits.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Dumbbell className="h-4 w-4 text-orange-500" />
-                Morning Habits
-              </CardTitle>
-              <div className="flex justify-between text-sm pt-1">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="font-medium">{completedCount}/{enabledHabits.length}</span>
-              </div>
-              <Progress value={progressPercent} className="h-2" />
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {enabledHabits.map((habit) => {
-                const Icon = getIconComponent(habit.icon);
-                const isComplete = rituals[habit.key]?.done;
-
-                return (
-                  <div
-                    key={habit.key}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      isComplete
-                        ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
-                        : "bg-muted/30 hover:bg-muted/50"
-                    }`}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* ============================================================ */}
+        {/* LEFT COLUMN: BODY & HABITS                                    */}
+        {/* ============================================================ */}
+        <div className="space-y-5">
+          {/* ---- MORNING HABITS ---- */}
+          {enabledHabits.length > 0 && (
+            <Card className="border-orange-500/20">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base font-bold">
+                    <Dumbbell className="h-4 w-4 text-orange-500" />
+                    Morning Habits
+                  </CardTitle>
+                  <Badge
+                    variant="outline"
+                    className={completedCount === enabledHabits.length
+                      ? "bg-green-500/10 text-green-400 border-green-500/20"
+                      : "text-muted-foreground"
+                    }
                   >
-                    <div className="flex items-center gap-3">
-                      <Checkbox
-                        id={habit.key}
-                        checked={isComplete}
-                        onCheckedChange={() => toggleHabit(habit.key)}
-                        className="h-5 w-5"
-                      />
-                      <Icon className={`h-4 w-4 ${isComplete ? "text-green-600" : "text-muted-foreground"}`} />
-                      <Label
-                        htmlFor={habit.key}
-                        className={`cursor-pointer text-sm ${isComplete ? "line-through text-muted-foreground" : ""}`}
-                      >
-                        {habit.label}
-                      </Label>
+                    {completedCount}/{enabledHabits.length}
+                  </Badge>
+                </div>
+                <Progress value={progressPercent} className="h-1.5 mt-2" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {enabledHabits.map((habit) => {
+                  const Icon = getIconComponent(habit.icon);
+                  const isComplete = rituals[habit.key]?.done;
+
+                  return (
+                    <div
+                      key={habit.key}
+                      className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+                        isComplete
+                          ? "bg-green-500/5 border-green-500/20"
+                          : "bg-muted/30 border-border/50 hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Checkbox
+                          id={habit.key}
+                          checked={isComplete}
+                          onCheckedChange={() => toggleHabit(habit.key)}
+                          className="h-5 w-5"
+                        />
+                        <Icon className={`h-4 w-4 ${isComplete ? "text-green-500" : "text-muted-foreground"}`} />
+                        <Label
+                          htmlFor={habit.key}
+                          className={`cursor-pointer text-sm ${isComplete ? "line-through text-muted-foreground" : ""}`}
+                        >
+                          {habit.label}
+                        </Label>
+                      </div>
+                      {habit.hasCount && (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            value={rituals[habit.key]?.count || ""}
+                            onChange={(e) => updateCount(habit.key, parseInt(e.target.value) || 0)}
+                            className="w-16 h-7 text-center text-xs"
+                            min={0}
+                          />
+                          <span className="text-[10px] text-muted-foreground w-8">{habit.countLabel}</span>
+                        </div>
+                      )}
                     </div>
-                    {habit.hasCount && (
-                      <div className="flex items-center gap-2">
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ---- HEALTH METRICS ---- */}
+          <Card className="border-rose-500/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <Heart className="h-4 w-4 text-rose-500" />
+                  Health Metrics
+                </CardTitle>
+                {healthComplete && (
+                  <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Logged
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Sleep Hours */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Sleep (hrs)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={16}
+                    step={0.5}
+                    placeholder="7.5"
+                    value={health.sleepHours}
+                    onChange={(e) => setHealth({ ...health, sleepHours: e.target.value })}
+                    onBlur={debouncedSave}
+                    className="h-9"
+                  />
+                </div>
+
+                {/* Sleep Quality */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Quality</Label>
+                  <Select value={health.sleepQuality} onValueChange={(v) => { setHealth({ ...health, sleepQuality: v }); debouncedSave(); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="poor">Poor</SelectItem>
+                      <SelectItem value="fair">Fair</SelectItem>
+                      <SelectItem value="good">Good</SelectItem>
+                      <SelectItem value="excellent">Excellent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Energy Level */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Energy</Label>
+                  <Select
+                    value={String(health.energyLevel || "")}
+                    onValueChange={(v) => { setHealth({ ...health, energyLevel: v }); debouncedSave(); }}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="1-5" /></SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n === 1 ? "1 - Drained" : n === 2 ? "2 - Low" : n === 3 ? "3 - Okay" : n === 4 ? "4 - Good" : "5 - Peak"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Mood */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Mood</Label>
+                  <Select value={health.mood} onValueChange={(v) => { setHealth({ ...health, mood: v }); debouncedSave(); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="peak">Peak</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Weight */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Weight (kg)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    placeholder="82"
+                    value={health.weightKg}
+                    onChange={(e) => setHealth({ ...health, weightKg: e.target.value })}
+                    onBlur={debouncedSave}
+                    className="h-9"
+                  />
+                </div>
+
+                {/* Stress Level */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Stress</Label>
+                  <Select value={health.stressLevel} onValueChange={(v) => { setHealth({ ...health, stressLevel: v }); debouncedSave(); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Steps */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Steps</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="8000"
+                    value={health.steps}
+                    onChange={(e) => setHealth({ ...health, steps: e.target.value })}
+                    onBlur={debouncedSave}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Workout Toggle */}
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className={`h-4 w-4 ${health.workoutDone ? "text-green-500" : "text-muted-foreground"}`} />
+                    <Label className="text-sm font-medium">Workout</Label>
+                  </div>
+                  <Switch
+                    checked={health.workoutDone}
+                    onCheckedChange={(v) => { setHealth({ ...health, workoutDone: v }); }}
+                  />
+                </div>
+                {health.workoutDone && (
+                  <div className="grid grid-cols-2 gap-3 pl-6">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Type</Label>
+                      <Select value={health.workoutType} onValueChange={(v) => setHealth({ ...health, workoutType: v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Type..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="strength">Strength</SelectItem>
+                          <SelectItem value="cardio">Cardio</SelectItem>
+                          <SelectItem value="yoga">Yoga</SelectItem>
+                          <SelectItem value="sports">Sports</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground uppercase tracking-wider">Duration</Label>
+                      <div className="flex items-center gap-1.5">
                         <Input
                           type="number"
-                          value={rituals[habit.key]?.count || ""}
-                          onChange={(e) => updateCount(habit.key, parseInt(e.target.value) || 0)}
-                          className="w-20 h-8 text-center"
                           min={0}
+                          placeholder="45"
+                          value={health.workoutDurationMin}
+                          onChange={(e) => setHealth({ ...health, workoutDurationMin: e.target.value })}
+                          className="h-9"
                         />
-                        <span className="text-xs text-muted-foreground">{habit.countLabel}</span>
+                        <span className="text-xs text-muted-foreground">min</span>
                       </div>
-                    )}
+                    </div>
                   </div>
-                );
-              })}
+                )}
+              </div>
             </CardContent>
           </Card>
-        )}
 
-        {/* Plan Your Day Card */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Target className="h-4 w-4 text-blue-500" />
-              Plan Your Day
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* One Thing to Ship */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Rocket className="h-3.5 w-3.5 text-purple-500" />
-                <Label className="text-sm font-medium">One Thing to Ship</Label>
+          {/* ---- EVENING REVIEW ---- */}
+          <Card className="border-indigo-500/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <Moon className="h-4 w-4 text-indigo-500" />
+                  Evening Review
+                </CardTitle>
+                {eveningComplete && (
+                  <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Done
+                  </Badge>
+                )}
               </div>
-              {priorityTasksDueToday.length > 0 ? (
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Fasting + Deep Work */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Fasting Hours */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Utensils className="h-3.5 w-3.5 text-orange-500" />
+                      <Label className="text-xs font-semibold">Fasting</Label>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">16h goal</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={24}
+                      step={0.5}
+                      placeholder="0"
+                      value={evening.fastingHours}
+                      onChange={(e) => setEvening({ ...evening, fastingHours: e.target.value })}
+                      className="w-16 h-8 text-center text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">hrs</span>
+                    {fastingH >= 16 && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                  </div>
+                  <Progress
+                    value={Math.min((fastingH / 16) * 100, 100)}
+                    className={`h-1 ${fastingH >= 16 ? "[&>div]:bg-green-500" : "[&>div]:bg-orange-500"}`}
+                  />
+                </div>
+
+                {/* Deep Work Hours */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Timer className="h-3.5 w-3.5 text-purple-500" />
+                      <Label className="text-xs font-semibold">Deep Work</Label>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">5h goal</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={12}
+                      step={0.5}
+                      placeholder="0"
+                      value={evening.deepWorkHours}
+                      onChange={(e) => setEvening({ ...evening, deepWorkHours: e.target.value })}
+                      className="w-16 h-8 text-center text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">hrs</span>
+                    {deepWorkH >= 5 && (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    )}
+                  </div>
+                  <Progress
+                    value={Math.min((deepWorkH / 5) * 100, 100)}
+                    className={`h-1 ${deepWorkH >= 5 ? "[&>div]:bg-green-500" : "[&>div]:bg-purple-500"}`}
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Reflection */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Reflection</Label>
+                <Textarea
+                  placeholder="What went well? What could improve? What are you grateful for?"
+                  value={evening.reflectionPm}
+                  onChange={(e) => setEvening({ ...evening, reflectionPm: e.target.value })}
+                  rows={3}
+                  className="text-sm resize-none"
+                />
+              </div>
+
+              {/* Journal */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Journal</Label>
+                <Textarea
+                  placeholder="Free-form thoughts, lessons learned, ideas..."
+                  value={evening.journalEntry}
+                  onChange={(e) => setEvening({ ...evening, journalEntry: e.target.value })}
+                  rows={3}
+                  className="text-sm resize-none"
+                />
+              </div>
+
+              {/* Day Summary */}
+              {totalTasks > 0 && (
+                <>
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center p-2.5 bg-muted/50 rounded-lg">
+                      <div className="text-xl font-bold text-blue-400">{completedTasks}/{totalTasks}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Tasks Done</div>
+                      <Progress value={taskCompletionRate} className="h-1 mt-1.5" />
+                    </div>
+                    <div className="text-center p-2.5 bg-muted/50 rounded-lg">
+                      <div className="text-xl font-bold text-purple-400">{completedOutcomes}/{totalOutcomes || 3}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Outcomes Hit</div>
+                      <Progress value={totalOutcomes > 0 ? (completedOutcomes / totalOutcomes) * 100 : 0} className="h-1 mt-1.5" />
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ============================================================ */}
+        {/* RIGHT COLUMN: MIND & EXECUTION                                */}
+        {/* ============================================================ */}
+        <div className="space-y-5">
+          {/* ---- DAY PLAN ---- */}
+          <Card className="border-blue-500/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <Target className="h-4 w-4 text-blue-500" />
+                  Day Plan
+                </CardTitle>
+                {planComplete && (
+                  <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Set
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* One Thing to Ship */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Rocket className="h-3.5 w-3.5 text-purple-500" />
+                  <Label className="text-xs font-semibold">One Thing to Ship</Label>
+                </div>
+                {priorityTasksDueToday.length > 0 ? (
+                  <Select
+                    value={planning.oneThingToShip}
+                    onValueChange={(value) => setPlanning({ ...planning, oneThingToShip: value })}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Pick your one thing..." /></SelectTrigger>
+                    <SelectContent>
+                      {priorityTasksDueToday.map((task) => (
+                        <SelectItem key={task.id} value={task.title}>
+                          <span className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={
+                                task.priority === "P0"
+                                  ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                  : "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                              }
+                            >
+                              {task.priority}
+                            </Badge>
+                            {task.title}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="What must you ship today?"
+                    value={planning.oneThingToShip}
+                    onChange={(e) => setPlanning({ ...planning, oneThingToShip: e.target.value })}
+                    className="h-9"
+                  />
+                )}
+              </div>
+
+              {/* Top 3 Outcomes */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Target className="h-3.5 w-3.5 text-blue-500" />
+                    <Label className="text-xs font-semibold">Top 3 Outcomes</Label>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{completedOutcomes}/{totalOutcomes || 3} done</span>
+                </div>
+                {top3Outcomes.map((outcome, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all ${
+                      outcome.completed && outcome.text.trim()
+                        ? "bg-green-500/5 border-green-500/20"
+                        : "bg-muted/20 border-border/50"
+                    }`}
+                  >
+                    <Checkbox
+                      id={`outcome-${index}`}
+                      checked={outcome.completed}
+                      onCheckedChange={() => toggleOutcomeCompleted(index)}
+                      disabled={!outcome.text.trim()}
+                      className="h-4 w-4"
+                    />
+                    <div
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                        index === 0
+                          ? "bg-purple-500/15 text-purple-400"
+                          : index === 1
+                          ? "bg-blue-500/15 text-blue-400"
+                          : "bg-slate-500/15 text-slate-400"
+                      }`}
+                    >
+                      {index + 1}
+                    </div>
+                    <Input
+                      placeholder={index === 0 ? "Most important outcome..." : `Outcome ${index + 1}...`}
+                      value={outcome.text}
+                      onChange={(e) => updateOutcomeText(index, e.target.value)}
+                      className={`flex-1 h-8 text-sm border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 ${
+                        outcome.completed ? "line-through text-muted-foreground" : ""
+                      }`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Primary Venture Focus */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  <Label className="text-xs font-semibold">Venture Focus</Label>
+                </div>
                 <Select
-                  value={planning.oneThingToShip}
-                  onValueChange={(value) => setPlanning({ ...planning, oneThingToShip: value })}
+                  value={planning.primaryVentureFocus}
+                  onValueChange={(value) => setPlanning({ ...planning, primaryVentureFocus: value })}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select your one thing to ship..." /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select venture..." /></SelectTrigger>
                   <SelectContent>
-                    {priorityTasksDueToday.map((task) => (
-                      <SelectItem key={task.id} value={task.title}>
+                    {activeVentures.map((venture) => (
+                      <SelectItem key={venture.id} value={venture.id}>
                         <span className="flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className={
-                              task.priority === "P0"
-                                ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-300"
-                                : "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-300"
-                            }
-                          >
-                            {task.priority}
-                          </Badge>
-                          {task.title}
+                          {venture.icon && <span>{venture.icon}</span>}
+                          {venture.name}
                         </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <Input
-                  placeholder="What's the one thing you must ship today?"
-                  value={planning.oneThingToShip}
-                  onChange={(e) => setPlanning({ ...planning, oneThingToShip: e.target.value })}
-                />
-              )}
-            </div>
-
-            {/* Top 3 Outcomes */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Target className="h-3.5 w-3.5 text-blue-500" />
-                <Label className="text-sm font-medium">Top 3 Outcomes</Label>
               </div>
-              {top3Outcomes.map((outcome, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
-                    outcome.completed && outcome.text.trim()
-                      ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
-                      : "bg-muted/30"
-                  }`}
-                >
-                  <Checkbox
-                    id={`outcome-${index}`}
-                    checked={outcome.completed}
-                    onCheckedChange={() => toggleOutcomeCompleted(index)}
-                    disabled={!outcome.text.trim()}
-                    className="h-5 w-5"
-                  />
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                      index === 0
-                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                        : index === 1
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {index + 1}
-                  </div>
-                  <Input
-                    placeholder={index === 0 ? "Most important outcome..." : `Outcome ${index + 1}...`}
-                    value={outcome.text}
-                    onChange={(e) => updateOutcomeText(index, e.target.value)}
-                    className={`flex-1 ${outcome.completed ? "line-through text-muted-foreground" : ""}`}
-                  />
+
+              {/* Morning Intention */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Sun className="h-3.5 w-3.5 text-amber-500" />
+                  <Label className="text-xs font-semibold">Morning Intention</Label>
                 </div>
-              ))}
-            </div>
-
-            {/* Primary Venture Focus */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                <Label className="text-sm font-medium">Primary Venture Focus</Label>
+                <Textarea
+                  placeholder="Today I'm focused on..."
+                  value={planning.reflectionAm}
+                  onChange={(e) => setPlanning({ ...planning, reflectionAm: e.target.value })}
+                  rows={2}
+                  className="text-sm resize-none"
+                />
               </div>
-              <Select
-                value={planning.primaryVentureFocus}
-                onValueChange={(value) => setPlanning({ ...planning, primaryVentureFocus: value })}
-              >
-                <SelectTrigger><SelectValue placeholder="Select a venture..." /></SelectTrigger>
-                <SelectContent>
-                  {activeVentures.map((venture) => (
-                    <SelectItem key={venture.id} value={venture.id}>
-                      <span className="flex items-center gap-2">
-                        {venture.icon && <span>{venture.icon}</span>}
-                        {venture.name}
+            </CardContent>
+          </Card>
+
+          {/* ---- MEALS ---- */}
+          <Card className="border-green-500/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base font-bold">
+                  <Apple className="h-4 w-4 text-green-500" />
+                  Meals
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {mealCount > 0 && (
+                    <div className="flex items-center gap-3 text-[10px]">
+                      <span className="flex items-center gap-1 text-orange-400">
+                        <Flame className="h-3 w-3" />
+                        {Math.round(totalCalories)} cal
                       </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Morning Intention */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Sun className="h-3.5 w-3.5 text-amber-500" />
-                <Label className="text-sm font-medium">Morning Intention</Label>
+                      <span className="flex items-center gap-1 text-blue-400">
+                        <Beef className="h-3 w-3" />
+                        {Math.round(totalProtein)}g
+                      </span>
+                    </div>
+                  )}
+                  <Badge variant="outline" className="text-[10px]">
+                    {mealCount} meals
+                  </Badge>
+                </div>
               </div>
-              <Textarea
-                placeholder="Today I'm grateful for... I'm focused on..."
-                value={planning.reflectionAm}
-                onChange={(e) => setPlanning({ ...planning, reflectionAm: e.target.value })}
-                rows={2}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ================================================================ */}
-      {/* DIVIDER */}
-      {/* ================================================================ */}
-      <Separator className="my-2" />
-
-      {/* ================================================================ */}
-      {/* EVENING SECTION */}
-      {/* ================================================================ */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Moon className="h-5 w-5 text-indigo-500" />
-          <h2 className="text-lg font-semibold">Evening</h2>
-        </div>
-
-        {/* Evening Metrics Card */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4 text-indigo-500" />
-              Evening Metrics
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Workout Row */}
-            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-              <div className="flex items-center gap-3">
-                <Dumbbell className={`h-4 w-4 ${evening.workoutDone ? "text-green-600" : "text-muted-foreground"}`} />
-                <Label className="text-sm font-medium">Workout</Label>
-              </div>
-              <Switch checked={evening.workoutDone} onCheckedChange={(v) => setEvening({ ...evening, workoutDone: v })} />
-            </div>
-
-            {evening.workoutDone && (
-              <div className="grid grid-cols-2 gap-4 pl-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Type</Label>
-                  <Select value={evening.workoutType} onValueChange={(v) => setEvening({ ...evening, workoutType: v })}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Type..." /></SelectTrigger>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Add Meal Form */}
+              <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border/50">
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={newMeal.mealType} onValueChange={(v) => setNewMeal({ ...newMeal, mealType: v })}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Meal type..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="strength">Strength</SelectItem>
-                      <SelectItem value="cardio">Cardio</SelectItem>
-                      <SelectItem value="yoga">Yoga</SelectItem>
-                      <SelectItem value="sports">Sports</SelectItem>
+                      <SelectItem value="breakfast">Breakfast</SelectItem>
+                      <SelectItem value="lunch">Lunch</SelectItem>
+                      <SelectItem value="dinner">Dinner</SelectItem>
+                      <SelectItem value="snack">Snack</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Input
+                    placeholder="Description..."
+                    value={newMeal.description}
+                    onChange={(e) => setNewMeal({ ...newMeal, description: e.target.value })}
+                    className="h-8 text-xs"
+                  />
                 </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Calories"
+                    value={newMeal.calories}
+                    onChange={(e) => setNewMeal({ ...newMeal, calories: e.target.value })}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Protein (g)"
+                    value={newMeal.proteinG}
+                    onChange={(e) => setNewMeal({ ...newMeal, proteinG: e.target.value })}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 px-3"
+                    disabled={!newMeal.mealType || !newMeal.description || addMealMutation.isPending}
+                    onClick={() => addMealMutation.mutate()}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Meals List */}
+              {isNutritionLoading ? (
+                <div className="h-16 bg-muted animate-pulse rounded-lg" />
+              ) : Array.isArray(nutritionEntries) && nutritionEntries.length > 0 ? (
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Duration (min)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    placeholder="45"
-                    value={evening.workoutDurationMin}
-                    onChange={(e) => setEvening({ ...evening, workoutDurationMin: e.target.value })}
-                    className="h-9"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {/* Steps */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Steps</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="8000"
-                  value={evening.steps}
-                  onChange={(e) => setEvening({ ...evening, steps: e.target.value })}
-                  className="h-9"
-                />
-              </div>
-
-              {/* Stress Level */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Stress Level</Label>
-                <Select value={evening.stressLevel} onValueChange={(v) => setEvening({ ...evening, stressLevel: v })}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Fasting + Deep Work */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Fasting Hours */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Utensils className="h-3.5 w-3.5 text-orange-500" />
-                    <Label className="text-sm font-medium">Fasting</Label>
+                  {nutritionEntries.map((meal) => (
+                    <div
+                      key={meal.id}
+                      className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/30 group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] shrink-0 ${
+                            meal.mealType === "breakfast"
+                              ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              : meal.mealType === "lunch"
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                              : meal.mealType === "dinner"
+                              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                              : "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                          }`}
+                        >
+                          {meal.mealType}
+                        </Badge>
+                        <span className="text-sm truncate">{meal.description}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        {meal.calories && (
+                          <span className="text-[10px] text-orange-400 tabular-nums">{Math.round(meal.calories)} cal</span>
+                        )}
+                        {meal.proteinG && (
+                          <span className="text-[10px] text-blue-400 tabular-nums">{Math.round(meal.proteinG)}g</span>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteMealMutation.mutate(meal.id)}
+                          disabled={deleteMealMutation.isPending}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Running Totals */}
+                  <div className="flex items-center justify-end gap-4 pt-1 pr-8">
+                    <span className="text-xs font-semibold text-orange-400 tabular-nums">
+                      Total: {Math.round(totalCalories)} cal
+                    </span>
+                    <span className="text-xs font-semibold text-blue-400 tabular-nums">
+                      {Math.round(totalProtein)}g protein
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Target: 16h</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={24}
-                    step={0.5}
-                    placeholder="0"
-                    value={evening.fastingHours}
-                    onChange={(e) => setEvening({ ...evening, fastingHours: e.target.value })}
-                    className="w-20 h-9"
-                  />
-                  <span className="text-xs text-muted-foreground">hours</span>
-                  {fastingH >= 16 && (
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Met
-                    </Badge>
-                  )}
-                </div>
-                <Progress
-                  value={Math.min((fastingH / 16) * 100, 100)}
-                  className={`h-1.5 ${fastingH >= 16 ? "[&>div]:bg-green-500" : "[&>div]:bg-orange-500"}`}
-                />
-              </div>
-
-              {/* Deep Work Hours */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Timer className="h-3.5 w-3.5 text-purple-500" />
-                    <Label className="text-sm font-medium">Deep Work</Label>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Target: 5h</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={12}
-                    step={0.5}
-                    placeholder="0"
-                    value={evening.deepWorkHours}
-                    onChange={(e) => setEvening({ ...evening, deepWorkHours: e.target.value })}
-                    className="w-20 h-9"
-                  />
-                  <span className="text-xs text-muted-foreground">hours</span>
-                  {deepWorkH >= 5 && (
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Met
-                    </Badge>
-                  )}
-                </div>
-                <Progress
-                  value={Math.min((deepWorkH / 5) * 100, 100)}
-                  className={`h-1.5 ${deepWorkH >= 5 ? "[&>div]:bg-green-500" : "[&>div]:bg-purple-500"}`}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Outcome Review Card */}
-        {totalTasks > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Trophy className="h-4 w-4 text-amber-500" />
-                Day Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{completedTasks}/{totalTasks}</div>
-                  <div className="text-xs text-muted-foreground">Tasks Done</div>
-                  <Progress value={taskCompletionRate} className="h-1.5 mt-2" />
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{completedOutcomes}/{totalOutcomes || 3}</div>
-                  <div className="text-xs text-muted-foreground">Outcomes Hit</div>
-                  <Progress value={totalOutcomes > 0 ? (completedOutcomes / totalOutcomes) * 100 : 0} className="h-1.5 mt-2" />
-                </div>
-              </div>
-
-              {/* One Thing to Ship status */}
-              {dayData?.oneThingToShip && (
-                <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Rocket className="h-3.5 w-3.5 text-purple-500" />
-                    <span className="font-medium text-xs">One Thing to Ship</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{dayData.oneThingToShip}</p>
-                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-3">No meals logged yet. Add one above.</p>
               )}
             </CardContent>
           </Card>
-        )}
 
-        {/* Evening Reflection Card */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4 text-indigo-500" />
-              Evening Reflection
-            </CardTitle>
-            <CardDescription className="text-xs">
-              What went well? What could improve? What are you grateful for?
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Today I accomplished... I learned... I'm grateful for... Tomorrow I will..."
-              value={evening.reflectionPm}
-              onChange={(e) => setEvening({ ...evening, reflectionPm: e.target.value })}
-              rows={4}
-            />
-          </CardContent>
-        </Card>
+          {/* ---- ONE THING STATUS ---- */}
+          {dayData?.oneThingToShip && (
+            <Card className="border-purple-500/20">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Rocket className="h-4 w-4 text-purple-500" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400">Ship It</span>
+                </div>
+                <p className="text-sm font-medium">{dayData.oneThingToShip}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
 
-      {/* Bottom Save Button (mobile convenience) */}
-      <div className="flex justify-center pb-4">
-        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="w-full sm:w-auto">
+      {/* ================================================================ */}
+      {/* BOTTOM SAVE BAR (mobile)                                         */}
+      {/* ================================================================ */}
+      <div className="flex justify-center pb-4 lg:hidden">
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          className="w-full font-semibold"
+        >
           {saveMutation.isPending ? "Saving..." : "Save All"}
         </Button>
       </div>
