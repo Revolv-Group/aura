@@ -377,7 +377,7 @@ app.use((req, res, next) => {
         // Mount Telegram webhook route if in webhook mode
         if (process.env.TELEGRAM_WEBHOOK_URL && telegramAdapter.bot) {
           const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-          app.use('/api/telegram/webhook', telegramAdapter.bot.webhookCallback(
+          app.use(telegramAdapter.bot.webhookCallback(
             '/api/telegram/webhook',
             { secretToken: secret }
           ));
