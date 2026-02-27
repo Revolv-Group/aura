@@ -391,7 +391,9 @@ app.use((req, res, next) => {
             }
             try {
               // req.body is already parsed by express.json()
-              await bot.handleUpdate(req.body);
+              const update = req.body;
+              log(`Telegram webhook: update_id=${update.update_id}, has_message=${!!update.message}, text="${update.message?.text || 'N/A'}", chat_id=${update.message?.chat?.id || 'N/A'}`);
+              await bot.handleUpdate(update);
               res.status(200).json({ ok: true });
             } catch (err) {
               log('Telegram webhook handleUpdate error:', String(err));
