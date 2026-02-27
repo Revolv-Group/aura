@@ -313,14 +313,18 @@ app.use((req, res, next) => {
       log('Categories seeding skipped:', String(error));
     }
 
-    // Clear any stale Telegram webhook so the new channel adapter can use polling
-    // The new adapter (telegram-adapter.ts) handles voice, photos, NLP, and all commands
-    try {
-      const { removeTelegramWebhook } = await import('./telegram-bot');
-      await removeTelegramWebhook();
-      log('✓ Telegram webhook cleared (using polling via channel adapter)');
-    } catch (error) {
-      log('Telegram webhook cleanup skipped:', String(error));
+    // Clear stale Telegram webhook ONLY if we're using polling mode
+    // If TELEGRAM_WEBHOOK_URL is set, the adapter will set its own webhook
+    if (!process.env.TELEGRAM_WEBHOOK_URL) {
+      try {
+        const { removeTelegramWebhook } = await import('./telegram-bot');
+        await removeTelegramWebhook();
+        log('✓ Telegram webhook cleared (using polling via channel adapter)');
+      } catch (error) {
+        log('Telegram webhook cleanup skipped:', String(error));
+      }
+    } else {
+      log('✓ Telegram webhook mode — skipping webhook cleanup');
     }
 
     // Initialize SB-OS automations
@@ -369,6 +373,17 @@ app.use((req, res, next) => {
         const { telegramAdapter } = await import('./channels/adapters/telegram-adapter');
         registerAdapter(telegramAdapter);
         await startAllAdapters();
+
+        // Mount Telegram webhook route if in webhook mode
+        if (process.env.TELEGRAM_WEBHOOK_URL && telegramAdapter.bot) {
+          const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+          app.use('/api/telegram/webhook', telegramAdapter.bot.webhookCallback(
+            '/api/telegram/webhook',
+            { secretToken: secret }
+          ));
+          log('✓ Telegram webhook route mounted at /api/telegram/webhook');
+        }
+
         log('✓ Channel adapters initialized');
       } catch (channelError) {
         log('Channel adapters setup skipped:', String(channelError));

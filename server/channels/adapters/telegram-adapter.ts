@@ -73,7 +73,7 @@ setInterval(() => {
 
 class TelegramAdapter implements ChannelAdapter {
   platform = "telegram" as const;
-  private bot: Telegraf | null = null;
+  public bot: Telegraf | null = null;
   private connected = false;
   private startedAt: Date | null = null;
   private lastTasksList = new Map<string, (string | number)[]>();
