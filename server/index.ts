@@ -379,17 +379,24 @@ app.use((req, res, next) => {
         if (process.env.TELEGRAM_WEBHOOK_URL && telegramAdapter.bot) {
           const bot = telegramAdapter.bot;
           const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-          app.post('/api/telegram/webhook', (req, res) => {
+          app.post('/api/telegram/webhook', async (req, res) => {
             // Validate secret token if configured
             if (secret) {
               const headerSecret = req.headers['x-telegram-bot-api-secret-token'];
               if (headerSecret !== secret) {
+                log('Telegram webhook: secret mismatch');
                 res.status(403).json({ error: 'Forbidden' });
                 return;
               }
             }
-            // req.body is already parsed by express.json()
-            bot.handleUpdate(req.body, res);
+            try {
+              // req.body is already parsed by express.json()
+              await bot.handleUpdate(req.body);
+              res.status(200).json({ ok: true });
+            } catch (err) {
+              log('Telegram webhook handleUpdate error:', String(err));
+              res.status(200).json({ ok: true }); // Always 200 to Telegram
+            }
           });
           log('✓ Telegram webhook route mounted at /api/telegram/webhook');
         }
