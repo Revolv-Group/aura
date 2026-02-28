@@ -35,6 +35,7 @@ import {
   updateEntityMention,
 } from "../memory/qdrant-store";
 import { createHash } from "crypto";
+import { rescueMemories } from "./memory-rescue";
 
 export interface CompactionResult {
   sessionId: string;
@@ -80,10 +81,33 @@ export async function compactSession(
 
     const rawMemoryIds = await upsertRawMemories(rawMemoryInputs);
 
-    // Step 3: Summarize via Cerebras/Ollama
+    // Step 2b: Pre-compaction memory rescue (parallel extractors)
+    // Runs 3 specialized extractors BEFORE summarization to rescue facts
+    // that would be lost during compaction. Non-blocking — failures don't stop compaction.
     const messageTexts = toCompact.map(
       (msg) => `[${msg.role.toUpperCase()}]: ${msg.content}`
     );
+
+    let rescueResult = null;
+    try {
+      rescueResult = await rescueMemories(sessionId, messageTexts);
+      if (rescueResult.committed > 0) {
+        logger.info(
+          {
+            sessionId,
+            rescued: rescueResult.committed,
+            facts: rescueResult.extractorResults.facts,
+            decisions: rescueResult.extractorResults.decisions,
+            skills: rescueResult.extractorResults.skills,
+          },
+          "Pre-compaction memory rescue saved memories"
+        );
+      }
+    } catch (rescueError) {
+      logger.warn({ rescueError, sessionId }, "Memory rescue failed (non-blocking, proceeding with compaction)");
+    }
+
+    // Step 3: Summarize via Cerebras/Ollama
     const userPrompt = buildCompactionPrompt(messageTexts);
 
     const completion = await generateCompletion(

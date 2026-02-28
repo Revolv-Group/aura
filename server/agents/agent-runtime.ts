@@ -46,6 +46,7 @@ import { deploy, getDeploymentHistory, getDeploymentStatus } from "./tools/deplo
 import { hybridSearch } from "../vector-search";
 import { buildLifeContext } from "./tools/life-context";
 import { getConversationHistory } from "./conversation-manager";
+import { scoreResponse, getEscalationModel, scrubCredentials } from "./response-quality-gate";
 
 // Lazy DB
 let db: any = null;
@@ -1219,7 +1220,40 @@ export async function executeAgentChat(
 
     // No tool calls → final response
     if (!choice.message.tool_calls || choice.message.tool_calls.length === 0) {
-      finalResponse = choice.message.content || "I'm ready to help. What would you like me to work on?";
+      const rawContent = choice.message.content || "I'm ready to help. What would you like me to work on?";
+
+      // Quality gate: score the response and escalate if needed
+      const quality = scoreResponse(rawContent, { agentSlug: agent.slug });
+
+      if (quality.shouldEscalate && turn < maxTurns - 1) {
+        const escalationModel = getEscalationModel(modelUsed);
+        if (escalationModel) {
+          logger.info(
+            { agentSlug: agent.slug, score: quality.score, issues: quality.issues, escalatingTo: escalationModel },
+            "Quality gate triggered escalation"
+          );
+          // Retry with higher-tier model on next turn
+          const { response: retryResponse, metrics: retryMetrics } = await modelManager.chatCompletion(
+            {
+              messages: conversationMessages,
+              tools: tools.length > 0 ? tools : undefined,
+              temperature: agent.temperature || 0.7,
+              max_tokens: agent.maxTokens || 4096,
+            },
+            "complex",
+            escalationModel
+          );
+          tokensUsed += retryMetrics.tokensUsed || 0;
+          modelUsed = retryMetrics.modelUsed;
+          const retryChoice = retryResponse.choices[0];
+          if (retryChoice?.message?.content) {
+            finalResponse = scrubCredentials(retryChoice.message.content);
+            break;
+          }
+        }
+      }
+
+      finalResponse = scrubCredentials(rawContent);
       break;
     }
 
@@ -1420,7 +1454,39 @@ export async function executeAgentTask(
       if (!choice?.message) break;
 
       if (!choice.message.tool_calls || choice.message.tool_calls.length === 0) {
-        finalResponse = choice.message.content || "";
+        const rawContent = choice.message.content || "";
+
+        // Quality gate for delegated task responses
+        const quality = scoreResponse(rawContent, { agentSlug: agent.slug });
+
+        if (quality.shouldEscalate && turn < maxTurns - 1) {
+          const escalationModel = getEscalationModel(modelUsed);
+          if (escalationModel) {
+            logger.info(
+              { agentSlug: agent.slug, taskId, score: quality.score, issues: quality.issues, escalatingTo: escalationModel },
+              "Quality gate triggered escalation (task execution)"
+            );
+            const { response: retryResponse, metrics: retryMetrics } = await modelManager.chatCompletion(
+              {
+                messages: conversationMessages,
+                tools: tools.length > 0 ? tools : undefined,
+                temperature: agent.temperature || 0.7,
+                max_tokens: agent.maxTokens || 4096,
+              },
+              "complex",
+              escalationModel
+            );
+            tokensUsed += retryMetrics.tokensUsed || 0;
+            modelUsed = retryMetrics.modelUsed;
+            const retryChoice = retryResponse.choices[0];
+            if (retryChoice?.message?.content) {
+              finalResponse = scrubCredentials(retryChoice.message.content);
+              break;
+            }
+          }
+        }
+
+        finalResponse = scrubCredentials(rawContent);
         break;
       }
 
